@@ -1,0 +1,8 @@
+MMER_ID = pdb_9bra
+MMER_SVOL = /templates/mb_mrcs_8A/9bra_mbz_align_shift.mrc
+MMER_ISO = 0.25
+PMER_L = 5
+PMER_L_MAX = 1.0
+PMER_OCC = 1.45
+PMER_OVER_TOL = 0.15
+PMER_REVERSE_NORMALS = False

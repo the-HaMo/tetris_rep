@@ -1,0 +1,7 @@
+MMER_ID = pdb_6qzp
+MMER_SVOL =/templates/mrcs_10A/6qzp.mrc
+MMER_ISO = 0.1
+PMER_L = 1.2
+PMER_L_MAX = 4000
+PMER_OCC = (0.80, 0.90)
+PMER_OVER_TOL = 0.01

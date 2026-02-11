@@ -1,0 +1,7 @@
+MMER_ID = pdb_1f4a
+MMER_SVOL =/templates/mrcs_10A/1f4a.mrc
+MMER_ISO = 0.1
+PMER_L = 1.2
+PMER_L_MAX = 400
+PMER_OCC = (0.16, 0.24)
+PMER_OVER_TOL = 0.0

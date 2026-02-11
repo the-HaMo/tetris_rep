@@ -1,0 +1,7 @@
+MMER_ID = pdb_8tux
+MMER_SVOL =/templates/mrcs_10A/8tux.mrc
+MMER_ISO = 0.1
+PMER_L = 1.2
+PMER_L_MAX = 2000
+PMER_OCC = (0.144, 0.192)
+PMER_OVER_TOL = 0.0
