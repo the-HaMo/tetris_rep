@@ -2,6 +2,7 @@
 Tetris Algorithm 3D 
 """
 
+import time
 import numpy as np
 import os
 from typing import Tuple, List
@@ -279,4 +280,14 @@ def run_tetris_3d():
 
 
 if __name__ == '__main__':
+    start_time = time.time()
+    
     tetris = run_tetris_3d()
+    
+    end_time = time.time()
+    elapsed_seconds = end_time - start_time
+    
+    minutes = int(elapsed_seconds // 60)
+    seconds = elapsed_seconds % 60
+
+    print(f"\nTiempo total de ejecución: {minutes} min {seconds:.2f} s")

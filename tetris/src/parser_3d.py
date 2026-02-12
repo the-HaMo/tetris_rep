@@ -94,7 +94,7 @@ class Parser3D:
         labels_path = filepath.replace(".mrc", "_labels.mrc")
         out_labels = np.swapaxes(insertion_labels, 0, 2) if swap_axes else insertion_labels
         with mrcfile.new(labels_path, overwrite=True) as mrc:
-            mrc.set_data(out_labels.astype(np.int32))
+            mrc.set_data(out_labels.astype(np.int16))
             mrc.voxel_size = voxel_size
 
         coords_path = filepath.replace(".mrc", "_coords.txt")
