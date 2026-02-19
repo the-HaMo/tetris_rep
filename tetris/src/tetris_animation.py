@@ -32,7 +32,7 @@ PROTEINS_LIST = [
     # "in_10A/1bxn_10A.pns",
 ]
 
-MAX_ATTEMPTS = 10000  # Límite de seguridad para inserciones
+MAX_ATTEMPTS = 1000  # Límite de seguridad para inserciones
 CANVAS_MULTIPLIER = 8  # Factor para tamaño del canvas
 
 class TetrisAnimation2D:

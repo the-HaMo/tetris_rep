@@ -30,9 +30,18 @@ PROTEINS_LIST = [
     # "in_10A/1bxn_10A.pns",
 ]
 
+VOI_SHAPE = (300, 300, 250)
+VOXEL_SIZE = 10.0  # nm
+FACTOR_DOWNSAMPLE = 2 
+
 EXPORT_VTP = True
 VTP_BASE_NAME = "tomo_009_poly"
 VTP_ISO_LEVEL = None  # None -> usa percentil automático
+
+# OPTIMIZACIONES
+USE_OPTIMIZATIONS = True  # Activar optimizaciones (ROI + cache local)
+USE_DOWNSAMPLING = True  # ULTRA: Correlación downsampled (4-6x más rápido)
+DEBUG_OPTIMIZATIONS = True  # Mostrar info de ROI en cada paso (ver impacto real)
 
 
 class Tetris3D:
@@ -59,6 +68,9 @@ class Tetris3D:
         self.insertion_labels = np.zeros(self.dimensions, dtype=np.int32)  # Volumen de labels
         self.all_coordinates = []
         self.all_molecule_types = []  # Tipo de cada molécula insertada
+        # OPTIMIZACIÓN: Cache para evitar recalcular todo cada vez
+        self._output_binary = None  # Cache del volumen binarizado
+        self._current_frontier = None  # Cache de la frontera
     
     def get_occupancy(self) -> float:
         """Calcula la ocupancia actual del volumen (porcentaje de vóxeles ocupados)."""
@@ -127,6 +139,13 @@ class Tetris3D:
             self.place_molecule_3d(center, rotated, molecule_id=step)
             self.all_coordinates.append(center)
             self.all_molecule_types.append(mol_name)
+            
+            # Inicializar cache para primera molécula
+            self._output_binary = ImageProcessing3D.smooth_and_binarize(
+                self.output_volume, self.sigma, self.threshold
+            )
+            self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
+            
             print(f"  Paso {step}: {mol_name} insertada en centro {center}")
             return True
         
@@ -138,11 +157,70 @@ class Tetris3D:
             rotated_binary, self.insertion_distances
         )
     
-        output_binary = ImageProcessing3D.smooth_and_binarize(
-            self.output_volume, self.sigma, self.threshold
-        )
+        # OPTIMIZACIÓN 2: Actualizar binary solo localmente (en vez de recalcular todo)
+        if USE_OPTIMIZATIONS and len(self.all_coordinates) > 0:
+            last_coord = self.all_coordinates[-1]
+            self._output_binary = ImageProcessing3D.update_binary_local(
+                self._output_binary, self.output_volume, last_coord, 
+                box_size, self.sigma, self.threshold
+            )
+            
+            # OPTIMIZACIÓN 2: Actualizar frontera solo localmente
+            self._current_frontier = ImageProcessing3D.update_frontier_local(
+                self._current_frontier, self._output_binary, last_coord, box_size
+            )
+        else:
+            # Sin optimización: recalcular todo
+            self._output_binary = ImageProcessing3D.smooth_and_binarize(
+                self.output_volume, self.sigma, self.threshold
+            )
+            self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
         
-        cmap = ImageProcessing3D.correlate(output_binary, template, box_size)
+        # OPTIMIZACIÓN 1: Correlación con ROI (solo en región de frontera)
+        # OPTIMIZACIÓN ULTRA: Downsampling (correlación en escala reducida)
+        if USE_DOWNSAMPLING:
+            # Método más rápido: correlación downsampled + refinamiento local
+            if DEBUG_OPTIMIZATIONS and step % 2 == 0:
+                bounds = ImageProcessing3D.get_frontier_roi_bounds(
+                    self._current_frontier, box_size, expansion_factor=1.1
+                )
+                roi_vol = (bounds[1]-bounds[0]) * (bounds[3]-bounds[2]) * (bounds[5]-bounds[4])
+                total_vol = self._output_binary.shape[0] * self._output_binary.shape[1] * self._output_binary.shape[2]
+                roi_pct = 100.0 * roi_vol / total_vol
+                print(f"    [PASO {step}] ROI: {roi_pct:.1f}% del volumen")
+            
+            cmap = ImageProcessing3D.correlate_downsampled(
+                self._output_binary, template, box_size,
+                downsample_factor=FACTOR_DOWNSAMPLE,  # Factor 2 = 8x más rápido
+                refine=True,          # Refinar en región pequeña
+                refine_size=25        # ±50 voxeles: suficiente para templates grandes (72x72x72)
+            )
+            
+            if DEBUG_OPTIMIZATIONS and step % 100 == 0:
+                print(f"    [PASO {step}] DOWNSAMPLING: factor 2 (8x velocidad)")
+                
+        elif USE_OPTIMIZATIONS:
+            # Método anterior: ROI basado en frontera (no tan efectivo)
+            cmap = ImageProcessing3D.correlate_roi(
+                self._output_binary, template, box_size, 
+                frontier=self._current_frontier,
+                expansion_factor=1.1  # ROI más agresivo que antes (era 1.5)
+            )
+            
+            # Debug cada 100 pasos para no saturar output
+            if DEBUG_OPTIMIZATIONS and self._current_frontier is not None and step % 100 == 0:
+                roi_bounds = ImageProcessing3D.get_frontier_roi_bounds(
+                    self._current_frontier, box_size, expansion_factor=1.1
+                )
+                if roi_bounds:
+                    z_start, z_end, y_start, y_end, x_start, x_end = roi_bounds
+                    roi_volume = (z_end - z_start) * (y_end - y_start) * (x_end - x_start)
+                    total_volume = np.prod(self.dimensions)
+                    roi_fraction = roi_volume / total_volume
+                    print(f"    [PASO {step}] ROI: {roi_fraction*100:.1f}% del volumen total")
+        else:
+            # Sin optimización: correlación completa
+            cmap = ImageProcessing3D.correlate(self._output_binary, template, box_size)
         
         if cmap.max() <= 0:
             print(f"  Paso {step}: SATURACIÓN - No se puede insertar {mol_name}")
@@ -194,7 +272,7 @@ def run_tetris_3d():
         
     # Crear Tetris 3D
     tetris = Tetris3D(
-        dimensions=(300, 300, 250), # VOI SHAPE 
+        dimensions=VOI_SHAPE,
         sigma=1.5,
         threshold=50,
         insertion_distances=(-2, 0)
@@ -236,7 +314,7 @@ def run_tetris_3d():
             # Verificar si se alcanzó la ocupancia objetivo
             current_occupancy = tetris.get_occupancy()
             if current_occupancy >= target_occupancy:
-                print(f"\n✓ OCUPANCIA OBJETIVO alcanzada: {current_occupancy*100:.1f}% >= {target_occupancy*100:.1f}%")
+                print(f"\nOCUPANCIA OBJETIVO alcanzada: {current_occupancy*100:.1f}% >= {target_occupancy*100:.1f}%")
                 print(f"  Total de moléculas insertadas: {inserted}")
                 print(f"  Distribución por proteína:")
                 for prot_name, count in inserted_per_protein.items():
@@ -270,14 +348,13 @@ def run_tetris_3d():
             insertion_labels=tetris.insertion_labels,
             output_dir=output_dir,
             base_name=VTP_BASE_NAME,
-            voxel_size=10.0,
+            voxel_size=VOXEL_SIZE,
             iso_level=VTP_ISO_LEVEL,
             sigma=tetris.sigma,
             threshold=tetris.threshold
         )
     
     return tetris
-
 
 if __name__ == '__main__':
     start_time = time.time()

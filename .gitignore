@@ -1,0 +1,11 @@
+# Generated data
+tetris/data/data_generated/
+
+# Heavy scientific formats
+*.mrc
+*.vtp
+
+# Python cache
+__pycache__/
+*.pyc
+

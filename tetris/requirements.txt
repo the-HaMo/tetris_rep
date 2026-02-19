@@ -1,0 +1,29 @@
+# Tetris 3D - Dependencias del proyecto
+# Algoritmo de empaquetamiento de proteínas en criomicroscopía
+
+# CREAR Y CONFIGURAR ENTORNO VIRTUAL:
+# 1. Crear el entorno: python -m venv .venv
+# 2. Activar en Linux/Mac: source .venv/bin/activate
+# 4. Instalar dependencias: pip install -r requirements.txt
+# 5. Desactivar: deactivate
+
+# Procesamiento numérico y arrays
+numpy>=1.24.0,<2.0.0
+
+# Procesamiento científico (filtros, correlaciones, morfología)
+scipy>=1.10.0,<2.0.0
+
+# Procesamiento de imágenes y morfología
+scikit-image>=0.20.0,<1.0.0
+
+# Lectura/escritura de archivos MRC (microscopía electrónica)
+mrcfile>=1.4.0,<2.0.0
+
+# Visualización 3D y exportación VTP
+vtk>=9.2.0,<10.0.0
+
+# Análisis de datos
+pandas>=2.0.0,<3.0.0
+
+# Generación de GIFs/animaciones
+imageio>=2.31.0,<3.0.0
