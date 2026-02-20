@@ -262,8 +262,8 @@ class ImageProcessing3D:
             binary_volume: Volumen binario completo
             position: Posición (z, y, x) donde se insertó la molécula
             box_size: Tamaño de la caja de la molécula
-            radius: Radio de dilatación para la frontera
-            margin: Margen extra alrededor de la región
+            radius: Radio de la región a actualizar (grande, escala con proteína)
+            margin: Margen para ball() en dilatación (pequeño, típicamente 1-3)
             
         Returns:
             Tupla (frontera_local, (z_start, z_end, y_start, y_end, x_start, x_end))
@@ -271,13 +271,13 @@ class ImageProcessing3D:
         z, y, x = position
         half = box_size // 2
         
-        # Calcular región de interés con margen
-        z_start = max(0, z - half - radius - margin)
-        z_end = min(binary_volume.shape[0], z + half + radius + margin)
-        y_start = max(0, y - half - radius - margin)
-        y_end = min(binary_volume.shape[1], y + half + radius + margin)
-        x_start = max(0, x - half - radius - margin)
-        x_end = min(binary_volume.shape[2], x + half + radius + margin)
+        # Calcular región de interés con radio
+        z_start = max(0, z - half - radius)
+        z_end = min(binary_volume.shape[0], z + half + radius)
+        y_start = max(0, y - half - radius)
+        y_end = min(binary_volume.shape[1], y + half + radius)
+        x_start = max(0, x - half - radius)
+        x_end = min(binary_volume.shape[2], x + half + radius)
         
         # Extraer región local
         local_region = binary_volume[z_start:z_end, y_start:y_end, x_start:x_end]
@@ -285,8 +285,8 @@ class ImageProcessing3D:
         if local_region.max() == 0:
             return np.zeros_like(local_region), (z_start, z_end, y_start, y_end, x_start, x_end)
         
-        # Calcular frontera solo en la región local
-        dilated = binary_dilation(local_region, ball(radius))
+        # Calcular frontera solo en la región local (margin para ball)
+        dilated = binary_dilation(local_region, ball(margin))
         frontier_local = dilated.astype(np.float32) - local_region.astype(np.float32)
         
         return frontier_local, (z_start, z_end, y_start, y_end, x_start, x_end)
@@ -309,8 +309,8 @@ class ImageProcessing3D:
             binary_volume: Volumen binario actualizado
             position: Posición (z, y, x) donde se insertó la molécula
             box_size: Tamaño de la caja de la molécula
-            radius: Radio de dilatación
-            margin: Margen extra
+            radius: Radio de la región a actualizar (grande, escala con proteína)
+            margin: Margen para ball() en dilatación (pequeño, típicamente 1-3)
             
         Returns:
             Frontera actualizada

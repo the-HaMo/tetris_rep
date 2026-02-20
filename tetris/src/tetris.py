@@ -3,45 +3,48 @@ Tetris Algorithm 3D
 """
 
 import time
+from networkx import radius
 import numpy as np
 import os
 from typing import Tuple, List
 from image_processing_3d import ImageProcessing3D
 from parser_3d import Parser3D
 
+np.random.seed(42)
 
 PROTEINS_LIST = [
     "in_10A/4v4r_10A.pns",
     "in_10A/3j9i_10A.pns",
     "in_10A/5mrc_10A.pns",
-    "in_10A/4v7r_10A.pns",
-    "in_10A/2uv8_10A.pns",
-    "in_10A/4v94_10A.pns",
-    "in_10A/4cr2_10A.pns",
-    "in_10A/3qm1_10A.pns",
-    "in_10A/3h84_10A.pns",
-    "in_10A/3gl1_10A.pns",
-    "in_10A/3d2f_10A.pns",
-    "in_10A/3cf3_10A.pns",
-    "in_10A/2cg9_10A.pns",
-    "in_10A/1u6g_10A.pns",
-    "in_10A/1s3x_10A.pns",
-    "in_10A/1qvr_10A.pns",
-    "in_10A/1bxn_10A.pns",
+    # "in_10A/4v7r_10A.pns",
+    # "in_10A/2uv8_10A.pns",
+    # "in_10A/4v94_10A.pns",
+    # "in_10A/4cr2_10A.pns",
+    # "in_10A/3qm1_10A.pns",
+    # "in_10A/3h84_10A.pns",
+    # "in_10A/3gl1_10A.pns",
+    # "in_10A/3d2f_10A.pns",
+    # "in_10A/3cf3_10A.pns",
+    # "in_10A/2cg9_10A.pns",
+    # "in_10A/1u6g_10A.pns",
+    # "in_10A/1s3x_10A.pns",
+    # "in_10A/1qvr_10A.pns",
+    # "in_10A/1bxn_10A.pns",
 ]
 
-VOI_SHAPE = (500, 500, 300)
+VOI_SHAPE = (300, 300, 250)
 VOXEL_SIZE = 10.0  # nm
 FACTOR_DOWNSAMPLE = 2 
+STEP_GAUSSIAN = 50
 
 EXPORT_VTP = True
 VTP_BASE_NAME = "tomo_000_poly"
 VTP_ISO_LEVEL = None  # None -> usa percentil automático
 
-# OPTIMIZACIONES
-USE_OPTIMIZATIONS = True  # Activar optimizaciones (ROI + cache local)
-USE_DOWNSAMPLING = True  # ULTRA: Correlación downsampled (4-6x más rápido)
-DEBUG_OPTIMIZATIONS = True  # Mostrar info de ROI en cada paso (ver impacto real)
+# # OPTIMIZACIONES
+# USE_OPTIMIZATIONS = True  # Activar optimizaciones (ROI + cache local)
+# USE_DOWNSAMPLING = True  # ULTRA: Correlación downsampled (4-6x más rápido)
+# DEBUG_OPTIMIZATIONS = True  # Mostrar info de ROI en cada paso (ver impacto real)
 
 
 class Tetris3D:
@@ -50,9 +53,9 @@ class Tetris3D:
     """
     
     def __init__(self, 
-                 dimensions: Tuple[int, int, int] = VOI_SHAPE,
-                 sigma: float = 1.5,
-                 threshold: float = 50,
+                 dimensions: Tuple[int, int, int] = VOI_SHAPE, # voxel 
+                 sigma: float = 1.5, # filtro gaussiano
+                 threshold: float = 100,  # umbral para binarización
                  insertion_distances: Tuple[int, int] = (-2, 0)):
         
         self.dimensions = np.array(dimensions)
@@ -68,21 +71,14 @@ class Tetris3D:
         self.insertion_labels = np.zeros(self.dimensions, dtype=np.int32)  # Volumen de labels
         self.all_coordinates = []
         self.all_molecule_types = []  # Tipo de cada molécula insertada
-        # OPTIMIZACIÓN: Cache para evitar recalcular todo cada vez
         self._output_binary = None  # Cache del volumen binarizado
         self._current_frontier = None  # Cache de la frontera
         self._step_count = 0  # Contador para gaussian cada 100 pasos
     
     def get_occupancy(self) -> float:
         """Calcula la ocupancia actual del volumen (porcentaje de vóxeles ocupados)."""
-        # Usar cache si disponible, sino recalcular con gaussian
-        if self._output_binary is None:
-            binary = ImageProcessing3D.smooth_and_binarize(
-                self.output_volume, self.sigma, self.threshold
-            )
-        else:
-            binary = self._output_binary
-        occupied = np.sum(binary > 0)
+        assert self._output_binary is not None, "Insertar al menos una molecula"
+        occupied = np.sum(self._output_binary > 0)
         total = np.prod(self.dimensions)
         return occupied / total
     
@@ -100,7 +96,7 @@ class Tetris3D:
         z, y, x = position
         
         # Calcular límites en el output
-        z_start = max(0, z - half[0])
+        z_start = max(0, z - half[0]) # no salir del volumen
         z_end = min(self.dimensions[0], z + half[0])
         y_start = max(0, y - half[1])
         y_end = min(self.dimensions[1], y + half[1])
@@ -119,13 +115,14 @@ class Tetris3D:
         mol_region = molecule[mol_z_start:mol_z_end, mol_y_start:mol_y_end, mol_x_start:mol_x_end]
         self.output_volume[z_start:z_end, y_start:y_end, x_start:x_end] += mol_region
         
-        # Actualizar labels donde la molécula tiene densidad significativa
-        mol_mask = mol_region > (mol_region.max() * 0.3)  # Umbral del 30%
+        # Actualizar labels donde la molécula tiene densidad significativa (Se puede quitar)
+        mol_mask = mol_region > (mol_region.max() * 0.3)  # Umbral del 30% para filtar ruido
         self.insertion_labels[z_start:z_end, y_start:y_end, x_start:x_end][mol_mask] = molecule_id
     
     def insert_molecule_3d(self, molecule: np.ndarray, mol_name: str = "mol") -> bool:
         """
-        Inserta una molécula 3D siguiendo el algoritmo Tetris.
+        Inserta una molécula 3D siguiendo el algoritmo Tetris (Paper).
+        Flujo: Rotate → Smooth&Binarize → Dilate → Subtract → Correlate → Find Max → Place
         
         Args:
             molecule: Volumen 3D de la molécula
@@ -137,15 +134,19 @@ class Tetris3D:
         step = len(self.all_coordinates) + 1
         center = tuple(self.dimensions // 2)
         
+        # STEP 1: RANDOM ROTATE
+        # Rotar la molécula aleatoriamente para simular diferentes orientaciones
         rotated, angles = ImageProcessing3D.randomly_rotate(molecule)
         box_size = max(rotated.shape)
         
+        # STEP 2: FIRST MOLECULE?
+        # Si es primera molécula, insertarla en centro. No hay donde buscar
         if len(self.all_coordinates) == 0:
             self.place_molecule_3d(center, rotated, molecule_id=step)
             self.all_coordinates.append(center)
             self.all_molecule_types.append(mol_name)
             
-            # Inicializar cache para primera molécula
+            # Inicializar caches (binary volume + frontier)
             self._output_binary = ImageProcessing3D.smooth_and_binarize(
                 self.output_volume, self.sigma, self.threshold
             )
@@ -154,18 +155,26 @@ class Tetris3D:
             print(f"Paso {step}: {mol_name} insertada en centro {center}")
             return True
         
+        # STEP 3: SMOOTH AND BINARIZE
+        # Suavizar molécula con Gaussian + binarizar
         rotated_binary = ImageProcessing3D.smooth_and_binarize(
             rotated, self.sigma, self.threshold
         )
         
+        # STEP 4: DILATE 
+        # STEP 5: SUBTRACT (CREATE IN-SHELL TEMPLATE)
+        # Dilate exterior e interior → Subtract = cáscara (shell)
+        # Cáscara: zona positiva (donde insertar) + penalización interior (evitar solape)
+        # ============================================================================
         template, outer_layer, inner_layer = ImageProcessing3D.create_in_shell(
-            rotated_binary, self.insertion_distances
+            rotated_binary, self.insertion_distances  # (-2, 0)
         )
     
-        # ESTRATEGIA HÍBRIDA: threshold rápido + gaussian cada 100 pasos
+        # STEP 6: BINARIZE OUTPUT VOLUME
+        # Estrategia híbrida: Threshold rápido (99 pasos) + Gaussian preciso (1 cada 100)
         self._step_count += 1
         
-        if self._step_count % 100 == 0:
+        if self._step_count % STEP_GAUSSIAN == 0:
             # Cada 100 inserciones: gaussian para corregir drift y evitar overlaps
             self._output_binary = ImageProcessing3D.smooth_and_binarize(
                 self.output_volume, self.sigma, self.threshold
@@ -178,80 +187,74 @@ class Tetris3D:
             )
             # Frontera se reutiliza del último gaussian (no recalcular)
         
-        # OPTIMIZACIÓN 1: Correlación con ROI (solo en región de frontera)
-        # OPTIMIZACIÓN ULTRA: Downsampling (correlación en escala reducida)
-        if USE_DOWNSAMPLING:
-            # Método más rápido: correlación downsampled + refinamiento local
-            if DEBUG_OPTIMIZATIONS and step % 2 == 0:
-                bounds = ImageProcessing3D.get_frontier_roi_bounds(
-                    self._current_frontier, box_size, expansion_factor=1.1
-                )
-                roi_vol = (bounds[1]-bounds[0]) * (bounds[3]-bounds[2]) * (bounds[5]-bounds[4])
-                total_vol = self._output_binary.shape[0] * self._output_binary.shape[1] * self._output_binary.shape[2]
-                roi_pct = 100.0 * roi_vol / total_vol
-                # print(f"    [PASO {step}] ROI: {roi_pct:.1f}% del volumen")
-            
-            cmap = ImageProcessing3D.correlate_downsampled(
-                self._output_binary, template, box_size,
-                downsample_factor=FACTOR_DOWNSAMPLE,  # Factor 2 = 8x más rápido
-                refine=True,          # Refinar en región pequeña
-                refine_size=25        # ±50 voxeles: suficiente para templates grandes (72x72x72)
-            )
-                       
-        elif USE_OPTIMIZATIONS:
-            # Método anterior: ROI basado en frontera (no tan efectivo)
-            cmap = ImageProcessing3D.correlate_roi(
-                self._output_binary, template, box_size, 
-                frontier=self._current_frontier,
-                expansion_factor=1.1  # ROI más agresivo que antes (era 1.5)
-            )
-            
-            # Debug cada 100 pasos para no saturar output
-            if DEBUG_OPTIMIZATIONS and self._current_frontier is not None and step % 100 == 0:
-                roi_bounds = ImageProcessing3D.get_frontier_roi_bounds(
-                    self._current_frontier, box_size, expansion_factor=1.1
-                )
-                if roi_bounds:
-                    z_start, z_end, y_start, y_end, x_start, x_end = roi_bounds
-                    roi_volume = (z_end - z_start) * (y_end - y_start) * (x_end - x_start)
-                    total_volume = np.prod(self.dimensions)
-                    roi_fraction = roi_volume / total_volume
-                    # print(f"    [PASO {step}] ROI: {roi_fraction*100:.1f}% del volumen total")
-        else:
-            # Sin optimización: correlación completa
-            cmap = ImageProcessing3D.correlate(self._output_binary, template, box_size)
+        # STEP 7: CORRELATE
+        # Calcular mapa de correlación entre template + output_binary
+        # Muestra dónde es mejor insertar (máximos = buenas posiciones)
+        # ============================================================================
+        # OPCIÓN A: Downsampling + refinamiento local (más rápido, 8x)
+        # (RECOMENDADO: mejor balance velocidad/precisión)
+        cmap = ImageProcessing3D.correlate_downsampled(
+            self._output_binary, template, box_size,
+            downsample_factor=FACTOR_DOWNSAMPLE,  # Factor 2 = 8x más rápido
+            refine=True,          # Refinar en región pequeña
+            refine_size=25        # ±50 voxeles: suficiente para templates grandes (72x72x72)
+        )
         
+        # ============================================================================
+        # OPCIONES ALTERNATIVAS (comentadas - descomentar si es necesario):
+        # ============================================================================
+        # OPCIÓN B: ROI (Region of Interest) basado en frontera (más lento que A)
+        # if USE_OPTIMIZATIONS:
+        #     cmap = ImageProcessing3D.correlate_roi(
+        #         self._output_binary, template, box_size, 
+        #         frontier=self._current_frontier,
+        #         expansion_factor=1.1
+        #     )
+        
+        # OPCIÓN C: Sin optimización - correlación completa (más lento, pero preciso)
+        # if not USE_DOWNSAMPLING:
+        #     cmap = ImageProcessing3D.correlate(self._output_binary, template, box_size)
+        
+      
+        # STEP 8: FIND MAXIMUM POSITION
+        # Si correlación máxima <= 0 → No hay espacio → SATURACIÓN
         if cmap.max() <= 0:
             print(f"  Paso {step}: SATURACIÓN - No se puede insertar {mol_name}")
             return False
         
-        # Paso 8: Insertar en posición óptima
+       
+        # STEP 9: INSERT AT BEST POSITION
+        # Colocar molécula en posición con máxima correlación
         coord = ImageProcessing3D.find_maximum_position(cmap)
         self.place_molecule_3d(coord, rotated, molecule_id=step)
         self.all_coordinates.append(coord)
         self.all_molecule_types.append(mol_name)
         
-        # CRÍTICO: Actualizar binary cache después de insertar
+     
+        # UPDATE CACHES: Binary volume + Frontier
+        # Binary: Binarizar output actualizado (para siguiente iteración)
+        # Frontier: Actualizar frontera LOCALMENTE (10x más rápido que global)
         self._output_binary = ImageProcessing3D.threshold_binarize(
             self.output_volume, self.threshold
         )
         
-        # OPTIMIZACIÓN: Actualizar frontera LOCALMENTE en vez de globalmente
-        # (Solo recalcula región afectada - 10x más rápido que frontera global)
+        # Actualizar frontera localmente (solo la región afectada)
         if self._current_frontier is None:
-            # Primera molécula: calcular frontera global
             self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
         else:
-            # Siguientes moléculas: actualizar solo la región local donde se insertó
+            radius = box_size // 2  # Radio de la proteína insertada
+            margin = 1              # Margen pequeño para ball() en dilatación
+            
             self._current_frontier = ImageProcessing3D.update_frontier_local(
                 self._current_frontier,
                 self._output_binary,
                 coord,
                 box_size,
-                radius=3,
-                margin=5
+                radius=radius,
+                margin=margin
             )
-        
+         
+        # STEP 10: REPORT OCCUPANCY & RETURN
         occupancy = self.get_occupancy()
         print(f"  Paso {step}: {mol_name} insertada en {coord} - Ocupancia: {occupancy*100:.1f}%")
         return True
