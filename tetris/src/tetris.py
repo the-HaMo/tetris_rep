@@ -86,18 +86,14 @@ class Tetris3D:
         total = np.prod(self.dimensions)
         return occupied / total
     
-    def place_molecule_3d(self, position: Tuple[int, int, int], molecule: np.ndarray, molecule_id: int = 0) -> bool:
+    def place_molecule_3d(self, position: Tuple[int, int, int], molecule: np.ndarray, molecule_id: int = 0):
         """
         Coloca una molécula 3D en el volumen de salida.
-        Verifica ANTES de insertar que no haya overlaps.
         
         Args:
             position: Coordenadas (z, y, x) centrales
             molecule: Volumen 3D de la molécula
             molecule_id: ID de la molécula para el volumen de labels
-            
-        Returns:
-            True si se insertó exitosamente, False si hay overlap
         """
         size = molecule.shape
         half = np.array(size) // 2
@@ -119,25 +115,13 @@ class Tetris3D:
         mol_x_start = half[2] - (x - x_start)
         mol_x_end = half[2] + (x_end - x)
         
-        # Extraer regiones
+        # Añadir molécula al output
         mol_region = molecule[mol_z_start:mol_z_end, mol_y_start:mol_y_end, mol_x_start:mol_x_end]
-        output_region = self.output_volume[z_start:z_end, y_start:y_end, x_start:x_end]
-        
-        # VERIFICACIÓN CRÍTICA: Detectar overlaps
-        # Donde la molécula es densa (>30%), no debería haber densidad preexistente
-        mol_mask = mol_region > (mol_region.max() * 0.3)  # Vóxeles significativos de molécula
-        
-        if (output_region[mol_mask] > 0).any():
-            # HAY OVERLAP - molécula densa se superpone con densidad existente
-            return False
-        
-        # Sin overlap - insertar
         self.output_volume[z_start:z_end, y_start:y_end, x_start:x_end] += mol_region
         
         # Actualizar labels donde la molécula tiene densidad significativa
+        mol_mask = mol_region > (mol_region.max() * 0.3)  # Umbral del 30%
         self.insertion_labels[z_start:z_end, y_start:y_end, x_start:x_end][mol_mask] = molecule_id
-        
-        return True
     
     def insert_molecule_3d(self, molecule: np.ndarray, mol_name: str = "mol") -> bool:
         """
@@ -246,13 +230,7 @@ class Tetris3D:
         
         # Paso 8: Insertar en posición óptima
         coord = ImageProcessing3D.find_maximum_position(cmap)
-        
-        # Verificar overlaps antes de insertar
-        inserted = self.place_molecule_3d(coord, rotated, molecule_id=step)
-        if not inserted:
-            # Overlap detectado en esta posición - rechazar inserción
-            return False
-        
+        self.place_molecule_3d(coord, rotated, molecule_id=step)
         self.all_coordinates.append(coord)
         self.all_molecule_types.append(mol_name)
         
