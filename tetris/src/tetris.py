@@ -71,24 +71,33 @@ class Tetris3D:
         # OPTIMIZACIÓN: Cache para evitar recalcular todo cada vez
         self._output_binary = None  # Cache del volumen binarizado
         self._current_frontier = None  # Cache de la frontera
+        self._step_count = 0  # Contador para gaussian cada 100 pasos
     
     def get_occupancy(self) -> float:
         """Calcula la ocupancia actual del volumen (porcentaje de vóxeles ocupados)."""
-        binary = ImageProcessing3D.smooth_and_binarize(
-            self.output_volume, self.sigma, self.threshold
-        )
+        # Usar cache si disponible, sino recalcular con gaussian
+        if self._output_binary is None:
+            binary = ImageProcessing3D.smooth_and_binarize(
+                self.output_volume, self.sigma, self.threshold
+            )
+        else:
+            binary = self._output_binary
         occupied = np.sum(binary > 0)
         total = np.prod(self.dimensions)
         return occupied / total
     
-    def place_molecule_3d(self, position: Tuple[int, int, int], molecule: np.ndarray, molecule_id: int = 0):
+    def place_molecule_3d(self, position: Tuple[int, int, int], molecule: np.ndarray, molecule_id: int = 0) -> bool:
         """
         Coloca una molécula 3D en el volumen de salida.
+        Verifica ANTES de insertar que no haya overlaps.
         
         Args:
             position: Coordenadas (z, y, x) centrales
             molecule: Volumen 3D de la molécula
             molecule_id: ID de la molécula para el volumen de labels
+            
+        Returns:
+            True si se insertó exitosamente, False si hay overlap
         """
         size = molecule.shape
         half = np.array(size) // 2
@@ -110,13 +119,25 @@ class Tetris3D:
         mol_x_start = half[2] - (x - x_start)
         mol_x_end = half[2] + (x_end - x)
         
-        # Añadir molécula al output
+        # Extraer regiones
         mol_region = molecule[mol_z_start:mol_z_end, mol_y_start:mol_y_end, mol_x_start:mol_x_end]
+        output_region = self.output_volume[z_start:z_end, y_start:y_end, x_start:x_end]
+        
+        # VERIFICACIÓN CRÍTICA: Detectar overlaps
+        # Donde la molécula es densa (>30%), no debería haber densidad preexistente
+        mol_mask = mol_region > (mol_region.max() * 0.3)  # Vóxeles significativos de molécula
+        
+        if (output_region[mol_mask] > 0).any():
+            # HAY OVERLAP - molécula densa se superpone con densidad existente
+            return False
+        
+        # Sin overlap - insertar
         self.output_volume[z_start:z_end, y_start:y_end, x_start:x_end] += mol_region
         
         # Actualizar labels donde la molécula tiene densidad significativa
-        mol_mask = mol_region > (mol_region.max() * 0.3)  # Umbral del 30%
         self.insertion_labels[z_start:z_end, y_start:y_end, x_start:x_end][mol_mask] = molecule_id
+        
+        return True
     
     def insert_molecule_3d(self, molecule: np.ndarray, mol_name: str = "mol") -> bool:
         """
@@ -157,24 +178,21 @@ class Tetris3D:
             rotated_binary, self.insertion_distances
         )
     
-        # OPTIMIZACIÓN 2: Actualizar binary solo localmente (en vez de recalcular todo)
-        if USE_OPTIMIZATIONS and len(self.all_coordinates) > 0:
-            last_coord = self.all_coordinates[-1]
-            self._output_binary = ImageProcessing3D.update_binary_local(
-                self._output_binary, self.output_volume, last_coord, 
-                box_size, self.sigma, self.threshold
-            )
-            
-            # OPTIMIZACIÓN 2: Actualizar frontera solo localmente
-            self._current_frontier = ImageProcessing3D.update_frontier_local(
-                self._current_frontier, self._output_binary, last_coord, box_size
-            )
-        else:
-            # Sin optimización: recalcular todo
+        # ESTRATEGIA HÍBRIDA: threshold rápido + gaussian cada 100 pasos
+        self._step_count += 1
+        
+        if self._step_count % 100 == 0:
+            # Cada 100 inserciones: gaussian para corregir drift y evitar overlaps
             self._output_binary = ImageProcessing3D.smooth_and_binarize(
                 self.output_volume, self.sigma, self.threshold
             )
             self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
+        else:
+            # 99 de 100: threshold ultra-rápido
+            self._output_binary = ImageProcessing3D.threshold_binarize(
+                self.output_volume, self.threshold
+            )
+            # Frontera se reutiliza del último gaussian (no recalcular)
         
         # OPTIMIZACIÓN 1: Correlación con ROI (solo en región de frontera)
         # OPTIMIZACIÓN ULTRA: Downsampling (correlación en escala reducida)
@@ -228,9 +246,36 @@ class Tetris3D:
         
         # Paso 8: Insertar en posición óptima
         coord = ImageProcessing3D.find_maximum_position(cmap)
-        self.place_molecule_3d(coord, rotated, molecule_id=step)
+        
+        # Verificar overlaps antes de insertar
+        inserted = self.place_molecule_3d(coord, rotated, molecule_id=step)
+        if not inserted:
+            # Overlap detectado en esta posición - rechazar inserción
+            return False
+        
         self.all_coordinates.append(coord)
         self.all_molecule_types.append(mol_name)
+        
+        # CRÍTICO: Actualizar binary cache después de insertar
+        self._output_binary = ImageProcessing3D.threshold_binarize(
+            self.output_volume, self.threshold
+        )
+        
+        # OPTIMIZACIÓN: Actualizar frontera LOCALMENTE en vez de globalmente
+        # (Solo recalcula región afectada - 10x más rápido que frontera global)
+        if self._current_frontier is None:
+            # Primera molécula: calcular frontera global
+            self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
+        else:
+            # Siguientes moléculas: actualizar solo la región local donde se insertó
+            self._current_frontier = ImageProcessing3D.update_frontier_local(
+                self._current_frontier,
+                self._output_binary,
+                coord,
+                box_size,
+                radius=3,
+                margin=5
+            )
         
         occupancy = self.get_occupancy()
         print(f"  Paso {step}: {mol_name} insertada en {coord} - Ocupancia: {occupancy*100:.1f}%")
@@ -297,6 +342,7 @@ def run_tetris_3d():
     
     inserted = 0
     inserted_per_protein = {name: 0 for name in mol_names}
+    last_occ_check = 0
     
     # Bucle infinito - solo se detiene por ocupancia o saturación
     while True:
@@ -311,22 +357,23 @@ def run_tetris_3d():
             inserted += 1
             inserted_per_protein[mol_name] += 1
             
-            # Verificar si se alcanzó la ocupancia objetivo
-            current_occupancy = tetris.get_occupancy()
-            if current_occupancy >= target_occupancy:
-                print(f"\nOCUPANCIA OBJETIVO alcanzada: {current_occupancy*100:.1f}% >= {target_occupancy*100:.1f}%")
-                print(f"  Total de moléculas insertadas: {inserted}")
-                print(f"  Distribución por proteína:")
-                for prot_name, count in inserted_per_protein.items():
-                    print(f"    {prot_name}: {count}")
-                break
+            # Verificar ocupancia cada 200 inserciones (no cada una - mucho más rápido)
+            if inserted - last_occ_check >= 200:
+                current_occupancy = tetris.get_occupancy()
+                print(f"  {inserted} proteínas - Ocupancia: {current_occupancy*100:.1f}%")
+                last_occ_check = inserted
+                
+                if current_occupancy >= target_occupancy:
+                    print(f"\n✓ OCUPANCIA OBJETIVO: {current_occupancy*100:.1f}%")
+                    print(f"  Proteínas insertadas: {inserted}")
+                    for prot_name, count in inserted_per_protein.items():
+                        print(f"    {prot_name}: {count}")
+                    break
         else:
             # Saturación - no caben más moléculas
             current_occupancy = tetris.get_occupancy()
-            print(f"\n✓ SATURACIÓN alcanzada - No caben más moléculas")
-            print(f"  Ocupancia final: {current_occupancy*100:.1f}%")
-            print(f"  Total de moléculas insertadas: {inserted}")
-            print(f"  Distribución por proteína:")
+            print(f"\n✓ SATURACIÓN - Ocupancia final: {current_occupancy*100:.1f}%")
+            print(f"  Proteínas insertadas: {inserted}")
             for prot_name, count in inserted_per_protein.items():
                 print(f"    {prot_name}: {count}")
             break
