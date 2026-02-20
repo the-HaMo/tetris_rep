@@ -14,28 +14,28 @@ PROTEINS_LIST = [
     "in_10A/4v4r_10A.pns",
     "in_10A/3j9i_10A.pns",
     "in_10A/5mrc_10A.pns",
-    # "in_10A/4v7r_10A.pns",
-    # "in_10A/2uv8_10A.pns",
-    # "in_10A/4v94_10A.pns",
-    # "in_10A/4cr2_10A.pns",
-    # "in_10A/3qm1_10A.pns",
-    # "in_10A/3h84_10A.pns",
-    # "in_10A/3gl1_10A.pns",
-    # "in_10A/3d2f_10A.pns",
-    # "in_10A/3cf3_10A.pns",
-    # "in_10A/2cg9_10A.pns",
-    # "in_10A/1u6g_10A.pns",
-    # "in_10A/1s3x_10A.pns",
-    # "in_10A/1qvr_10A.pns",
-    # "in_10A/1bxn_10A.pns",
+    "in_10A/4v7r_10A.pns",
+    "in_10A/2uv8_10A.pns",
+    "in_10A/4v94_10A.pns",
+    "in_10A/4cr2_10A.pns",
+    "in_10A/3qm1_10A.pns",
+    "in_10A/3h84_10A.pns",
+    "in_10A/3gl1_10A.pns",
+    "in_10A/3d2f_10A.pns",
+    "in_10A/3cf3_10A.pns",
+    "in_10A/2cg9_10A.pns",
+    "in_10A/1u6g_10A.pns",
+    "in_10A/1s3x_10A.pns",
+    "in_10A/1qvr_10A.pns",
+    "in_10A/1bxn_10A.pns",
 ]
 
-VOI_SHAPE = (300, 300, 250)
+VOI_SHAPE = (500, 500, 300)
 VOXEL_SIZE = 10.0  # nm
 FACTOR_DOWNSAMPLE = 2 
 
 EXPORT_VTP = True
-VTP_BASE_NAME = "tomo_009_poly"
+VTP_BASE_NAME = "tomo_000_poly"
 VTP_ISO_LEVEL = None  # None -> usa percentil automático
 
 # OPTIMIZACIONES
@@ -50,7 +50,7 @@ class Tetris3D:
     """
     
     def __init__(self, 
-                 dimensions: Tuple[int, int, int] = (256, 256, 256),
+                 dimensions: Tuple[int, int, int] = VOI_SHAPE,
                  sigma: float = 1.5,
                  threshold: float = 50,
                  insertion_distances: Tuple[int, int] = (-2, 0)):
@@ -151,7 +151,7 @@ class Tetris3D:
             )
             self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
             
-            print(f"  Paso {step}: {mol_name} insertada en centro {center}")
+            print(f"Paso {step}: {mol_name} insertada en centro {center}")
             return True
         
         rotated_binary = ImageProcessing3D.smooth_and_binarize(
@@ -189,7 +189,7 @@ class Tetris3D:
                 roi_vol = (bounds[1]-bounds[0]) * (bounds[3]-bounds[2]) * (bounds[5]-bounds[4])
                 total_vol = self._output_binary.shape[0] * self._output_binary.shape[1] * self._output_binary.shape[2]
                 roi_pct = 100.0 * roi_vol / total_vol
-                print(f"    [PASO {step}] ROI: {roi_pct:.1f}% del volumen")
+                # print(f"    [PASO {step}] ROI: {roi_pct:.1f}% del volumen")
             
             cmap = ImageProcessing3D.correlate_downsampled(
                 self._output_binary, template, box_size,
@@ -197,10 +197,7 @@ class Tetris3D:
                 refine=True,          # Refinar en región pequeña
                 refine_size=25        # ±50 voxeles: suficiente para templates grandes (72x72x72)
             )
-            
-            if DEBUG_OPTIMIZATIONS and step % 100 == 0:
-                print(f"    [PASO {step}] DOWNSAMPLING: factor 2 (8x velocidad)")
-                
+                       
         elif USE_OPTIMIZATIONS:
             # Método anterior: ROI basado en frontera (no tan efectivo)
             cmap = ImageProcessing3D.correlate_roi(
@@ -219,7 +216,7 @@ class Tetris3D:
                     roi_volume = (z_end - z_start) * (y_end - y_start) * (x_end - x_start)
                     total_volume = np.prod(self.dimensions)
                     roi_fraction = roi_volume / total_volume
-                    print(f"    [PASO {step}] ROI: {roi_fraction*100:.1f}% del volumen total")
+                    # print(f"    [PASO {step}] ROI: {roi_fraction*100:.1f}% del volumen total")
         else:
             # Sin optimización: correlación completa
             cmap = ImageProcessing3D.correlate(self._output_binary, template, box_size)
@@ -297,7 +294,7 @@ def run_tetris_3d():
     tetris = Tetris3D(
         dimensions=VOI_SHAPE,
         sigma=1.5,
-        threshold=50,
+        threshold=1,
         insertion_distances=(-2, 0)
     )
     
@@ -342,7 +339,7 @@ def run_tetris_3d():
                 last_occ_check = inserted
                 
                 if current_occupancy >= target_occupancy:
-                    print(f"\n✓ OCUPANCIA OBJETIVO: {current_occupancy*100:.1f}%")
+                    print(f"\nOCUPANCIA OBJETIVO: {current_occupancy*100:.1f}%")
                     print(f"  Proteínas insertadas: {inserted}")
                     for prot_name, count in inserted_per_protein.items():
                         print(f"    {prot_name}: {count}")
@@ -350,7 +347,7 @@ def run_tetris_3d():
         else:
             # Saturación - no caben más moléculas
             current_occupancy = tetris.get_occupancy()
-            print(f"\n✓ SATURACIÓN - Ocupancia final: {current_occupancy*100:.1f}%")
+            print(f"\nSATURACIÓN - Ocupancia final: {current_occupancy*100:.1f}%")
             print(f"  Proteínas insertadas: {inserted}")
             for prot_name, count in inserted_per_protein.items():
                 print(f"    {prot_name}: {count}")

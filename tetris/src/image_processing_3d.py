@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Procesamiento de Volúmenes 3D para el Algoritmo Tetris
 =======================================================
@@ -23,6 +22,22 @@ class ImageProcessing3D:
     Clase con operaciones de procesamiento de volúmenes 3D para el algoritmo Tetris.
     Extiende las operaciones 2D al espacio tridimensional.
     """
+    
+    @staticmethod
+    def calculate_frontier_radius(molecules: dict, margin: int = 5) -> int:
+        """
+        Calcula el radio óptimo de frontera basado en la molécula más grande.
+        
+        Args:
+            molecules: Diccionario {nombre: volumen_3d}
+            margin: Margen extra para expandir el radio
+            
+        Returns:
+            Radio de frontera = (tamaño_máximo // 2) + margin
+        """
+        max_box_size = max(max(mol.shape) for mol in molecules.values())
+        frontier_radius = max_box_size // 2 + margin
+        return frontier_radius
     
     @staticmethod
     def randomly_rotate(data: np.ndarray, 
@@ -193,21 +208,6 @@ class ImageProcessing3D:
         cmap[:, :, -half-1:] = 0
         
         return cmap
-    
-    @staticmethod
-    def is_cmap_negative(cmap: np.ndarray) -> bool:
-        """
-        Paso: C-map is negative? (3D)
-        
-        Verifica si el máximo del C-map es negativo o cero (saturación).
-        
-        Args:
-            cmap: Mapa de correlación 3D
-            
-        Returns:
-            True si saturación (no hay posición válida), False si hay espacio
-        """
-        return cmap.max() <= 0
     
     @staticmethod
     def find_maximum_position(cmap: np.ndarray) -> Tuple[int, int, int]:
@@ -537,7 +537,7 @@ class ImageProcessing3D:
         """
         OPTIMIZACIÓN ULTRA: Correlación con downsampling.
         
-        Reduce resolución por factor 2 (o más), correlaciona en escala pequeña (8x+ más rápido),
+        Reduce resolución por factor 2 (o más), correlaciona en escala pequeña,
         encuentra candidato, y opcionalmente refina en región pequeña en escala completa.
         
         Args:
