@@ -9,3 +9,4 @@ tetris/data/data_generated/
 __pycache__/
 *.pyc
 
+.venv/
