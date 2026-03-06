@@ -3,10 +3,9 @@ Tetris Algorithm 3D
 """
 
 import time
-from networkx import radius
 import numpy as np
 import os
-from typing import Tuple, List
+from typing import Tuple
 from image_processing_3d import ImageProcessing3D
 from parser_3d import Parser3D
 
@@ -16,26 +15,26 @@ PROTEINS_LIST = [
     "in_10A/4v4r_10A.pns",
     "in_10A/3j9i_10A.pns",
     "in_10A/5mrc_10A.pns",
-    # "in_10A/4v7r_10A.pns",
-    # "in_10A/2uv8_10A.pns",
-    # "in_10A/4v94_10A.pns",
-    # "in_10A/4cr2_10A.pns",
-    # "in_10A/3qm1_10A.pns",
-    # "in_10A/3h84_10A.pns",
-    # "in_10A/3gl1_10A.pns",
-    # "in_10A/3d2f_10A.pns",
-    # "in_10A/3cf3_10A.pns",
-    # "in_10A/2cg9_10A.pns",
-    # "in_10A/1u6g_10A.pns",
-    # "in_10A/1s3x_10A.pns",
-    # "in_10A/1qvr_10A.pns",
-    # "in_10A/1bxn_10A.pns",
+    "in_10A/4v7r_10A.pns",
+    "in_10A/2uv8_10A.pns",
+    "in_10A/4v94_10A.pns",
+    "in_10A/4cr2_10A.pns",
+    "in_10A/3qm1_10A.pns",
+    "in_10A/3h84_10A.pns",
+    "in_10A/3gl1_10A.pns",
+    "in_10A/3d2f_10A.pns",
+    "in_10A/3cf3_10A.pns",
+    "in_10A/2cg9_10A.pns",
+    "in_10A/1u6g_10A.pns",
+    "in_10A/1s3x_10A.pns",
+    "in_10A/1qvr_10A.pns",
+    "in_10A/1bxn_10A.pns",
 ]
 
 VOI_SHAPE = (300, 300, 250)
 VOXEL_SIZE = 10.0  # nm
 FACTOR_DOWNSAMPLE = 2 
-STEP_GAUSSIAN = 50
+STEP_GAUSSIAN = 25
 
 EXPORT_VTP = True
 VTP_BASE_NAME = "tomo_000_poly"
@@ -175,13 +174,11 @@ class Tetris3D:
         self._step_count += 1
         
         if self._step_count % STEP_GAUSSIAN == 0:
-            # Cada 100 inserciones: gaussian para corregir drift y evitar overlaps
             self._output_binary = ImageProcessing3D.smooth_and_binarize(
                 self.output_volume, self.sigma, self.threshold
             )
             self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
         else:
-            # 99 de 100: threshold ultra-rápido
             self._output_binary = ImageProcessing3D.threshold_binarize(
                 self.output_volume, self.threshold
             )
@@ -335,7 +332,7 @@ def run_tetris_3d():
             inserted += 1
             inserted_per_protein[mol_name] += 1
             
-            # Verificar ocupancia cada 200 inserciones (no cada una - mucho más rápido)
+            # Verificar ocupancia cada 200 inserciones
             if inserted - last_occ_check >= 200:
                 current_occupancy = tetris.get_occupancy()
                 print(f"  {inserted} proteínas - Ocupancia: {current_occupancy*100:.1f}%")
