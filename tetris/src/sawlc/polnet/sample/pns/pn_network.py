@@ -29,6 +29,7 @@ class NetSAWLC(Network):
         tries_pmer=10,
         rots=None,
         rot_id=0,
+        verbosity=False,
     ):
         """
         Construction
@@ -74,10 +75,11 @@ class NetSAWLC(Network):
         # Variables assignment
         self.__l_length, self.__m_surf = l_length, m_surf
         self.__max_p_length = max_p_length
-        self.__occ, self.__over_tolerance = occ, over_tolerance
+        self.__occ, self.__over_tolerance = occ*100, over_tolerance
         self.__poly = poly
         self.__tries_mmer = int(tries_mmer)
         self.__tries_pmer = int(tries_pmer)
+        self.__verbosity = bool(verbosity)
         self.__poly_area = None
         if self.__poly is not None:
             self._Network__poly_area = poly_surface_area(self.__poly)
@@ -102,7 +104,9 @@ class NetSAWLC(Network):
         """
 
         c_try = 0
+        iter_id = 0
         self._Network__pmer_fails = 0
+        total_proteins = 0
         if self.__rots is not None:
             rot_id = self.__rot_id
 
@@ -226,10 +230,19 @@ class NetSAWLC(Network):
             else:
                 self.add_polymer(hold_polymer, occ_mode="area")
                 c_try = 0
+
+            iter_id += 1
+            if self.__verbosity:
+                print(
+                    f"Paso {iter_id}: {hold_polymer.get_num_mmers()} proteinas insertadas. Ocupancia {self._Network__pl_occ:.4f}%"
+                )
+            total_proteins += hold_polymer.get_num_mmers()
             # print('build_network: new polymer added with ' + str(hold_polymer.get_num_monomers()) +
             #       ', length ' + str(hold_polymer.get_total_len()) + ' and occupancy ' +
             #       str(self._Network__pl_occ) + '%')
 
+        print(f"Total proteinas insertadas: {total_proteins}")
+        print(f"Pmer fails: {self._Network__pmer_fails}")
         # print('Exit with c_try=' + str(c_try) + ' and c_fails=' + str(self._Network__pmer_fails))
 
 

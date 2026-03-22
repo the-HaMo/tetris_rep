@@ -9,12 +9,12 @@ from typing import Tuple
 from image_processing_3d import ImageProcessing3D
 from parser_3d import Parser3D
 
-np.random.seed(42)
+# np.random.seed(42)
 
 PROTEINS_LIST = [
     "in_10A/4v4r_10A.pns",
-    "in_10A/3j9i_10A.pns",
-    "in_10A/5mrc_10A.pns",
+    # "in_10A/3j9i_10A.pns",
+    # "in_10A/5mrc_10A.pns",
     # "in_10A/4v7r_10A.pns",
     # "in_10A/2uv8_10A.pns",
     # "in_10A/4v94_10A.pns",
@@ -34,7 +34,7 @@ PROTEINS_LIST = [
 VOI_SHAPE = (300, 300, 250)
 VOXEL_SIZE = 10.0  # nm
 FACTOR_DOWNSAMPLE = 2 
-STEP_GAUSSIAN = 25
+STEP_GAUSSIAN = 100
 
 EXPORT_VTP = True
 VTP_BASE_NAME = "tomo_000_poly"
@@ -76,8 +76,11 @@ class Tetris3D:
     
     def get_occupancy(self) -> float:
         """Calcula la ocupancia actual del volumen (porcentaje de vóxeles ocupados)."""
-        assert self._output_binary is not None, "Insertar al menos una molecula"
-        occupied = np.sum(self._output_binary > 0)
+        # assert self._output_binary is not None, "Insertar al menos una molecula"
+        # occupied = np.sum(self._output_binary > 0)
+        # total = np.prod(self.dimensions)
+        # return occupied / total
+        occupied = np.count_nonzero(self.output_volume > self.threshold)
         total = np.prod(self.dimensions)
         return occupied / total
     
@@ -115,7 +118,8 @@ class Tetris3D:
         self.output_volume[z_start:z_end, y_start:y_end, x_start:x_end] += mol_region
         
         # Actualizar labels donde la molécula tiene densidad significativa (Se puede quitar)
-        mol_mask = mol_region > (mol_region.max() * 0.3)  # Umbral del 30% para filtar ruido
+        # mol_mask = mol_region > (mol_region.max() * 0.3)  # Umbral del 30% para filtar ruido
+        mol_mask = mol_region > self.threshold  # Cualquier voxel con densidad > 0 se etiqueta (más agresivo)
         self.insertion_labels[z_start:z_end, y_start:y_end, x_start:x_end][mol_mask] = molecule_id
     
     def insert_molecule_3d(self, molecule: np.ndarray, mol_name: str = "mol") -> bool:
@@ -317,7 +321,6 @@ def run_tetris_3d():
     
     inserted = 0
     inserted_per_protein = {name: 0 for name in mol_names}
-    last_occ_check = 0
     
     # Bucle infinito - solo se detiene por ocupancia o saturación
     while True:
@@ -331,19 +334,16 @@ def run_tetris_3d():
         if success:
             inserted += 1
             inserted_per_protein[mol_name] += 1
+
+            # Verificar objetivo en cada inserción 
+            current_occupancy = tetris.get_occupancy()
+            if current_occupancy >= target_occupancy:
+                print(f"\nOCUPANCIA OBJETIVO: {current_occupancy*100:.1f}%")
+                print(f"  Proteínas insertadas: {inserted}")
+                for prot_name, count in inserted_per_protein.items():
+                    print(f"    {prot_name}: {count}")
+                break
             
-            # Verificar ocupancia cada 200 inserciones
-            if inserted - last_occ_check >= 200:
-                current_occupancy = tetris.get_occupancy()
-                print(f"  {inserted} proteínas - Ocupancia: {current_occupancy*100:.1f}%")
-                last_occ_check = inserted
-                
-                if current_occupancy >= target_occupancy:
-                    print(f"\nOCUPANCIA OBJETIVO: {current_occupancy*100:.1f}%")
-                    print(f"  Proteínas insertadas: {inserted}")
-                    for prot_name, count in inserted_per_protein.items():
-                        print(f"    {prot_name}: {count}")
-                    break
         else:
             # Saturación - no caben más moléculas
             current_occupancy = tetris.get_occupancy()
