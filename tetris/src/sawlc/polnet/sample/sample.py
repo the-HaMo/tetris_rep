@@ -202,8 +202,8 @@ class SyntheticSample():
             params: dict, 
             data_path: Path,
             surf_dec: float = 0.9,
-            mmer_tries: int = 200,
-            pmer_tries: int = 400,
+            mmer_tries: int = 20,
+            pmer_tries: int = 100,
             verbosity: bool = True
         ) -> None:
         """Generate and add a set of cytosolic proteins to the sample. Parameters for the protein generator class should be provided via the params dict.
