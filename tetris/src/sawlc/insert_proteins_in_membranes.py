@@ -6,10 +6,10 @@ import os
 from pathlib import Path
 import numpy as np
 import time
-import scipy.ndimage as ndi
 import vtk
 
 from polnet.tomogram import SynthTomo
+from polnet.sample import SyntheticSample, PnFile
 from polnet.utils import lio
 from polnet.utils import poly as pp
 
@@ -19,17 +19,17 @@ MEMBRANES_PATH = ROOT_PATH / "templates" / "membranes"
 
 # Membrane files to process
 MEMBRANE_FILES = [
-    "tomo_mem_lbls_0.mrc",
+    # "tomo_mem_lbls_0.mrc",
     # "tomo_mem_lbls_1.mrc",
-    # "tomo_mem_lbls_2.mrc",
+    "tomo_mem_lbls_2.mrc",
     # "tomo_mem_lbls_3.mrc",
  ]
 
 # Proteins to insert
 PROTEINS_LIST = [
-    "in_10A/4v4r_10A.pns",
+    # "in_10A/4v4r_10A.pns",
     # "in_10A/3j9i_10A.pns",
-    # "in_10A/5mrc_10A.pns",
+    "in_10A/5mrc_10A.pns",
     # "in_10A/4v7r_10A.pns",
     # "in_10A/2uv8_10A.pns",
     # "in_10A/4v94_10A.pns",
@@ -51,7 +51,6 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 VOI_VSIZE = 10  # A/vx
 MEMBRANE_INTENSITY_SCALE = 0.35
-PROTEIN_CLEARANCE_VOXELS = 6
 CLEAN_INTERMEDIATE_FILES = True
 EXPORT_VTP = True
 PROTEIN_ISO_THRESHOLD_RATIO = 0.08
@@ -120,9 +119,17 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
         print(f"ERROR loading membrane: {e}")
         return None
     
-    # Create SynthTomo with loaded membrane as base
-    # Note: We're using the membrane as a starting point and adding proteins to it
+    # Build a restricted VOI so SAWLC cannot place proteins inside membrane voxels.
     try:
+        membrane_mask = membrane_volume > 0
+        membrane_voxels = int(np.count_nonzero(membrane_mask))
+        total_voxels = int(membrane_mask.size)
+        membrane_occ = (membrane_voxels / total_voxels) * 100.0 if total_voxels > 0 else 0.0
+        print(
+            f"[DEBUG] Membrane voxels: {membrane_voxels}/{total_voxels} "
+            f"({membrane_occ:.4f}%)"
+        )
+
         tomo = SynthTomo(
             id=membrane_id,
             mbs_file_list=[],  # No need to generate membranes
@@ -130,15 +137,40 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
             pns_file_list=proteins_list,
             pms_file_list=[],
         )
-        
-        # Generate proteins in the membrane volume
-        tomo.gen_sample(
-            data_path=ROOT_PATH,
+
+        sample = SyntheticSample(
             shape=membrane_volume.shape,
             v_size=VOI_VSIZE,
             offset=(0, 0, 0),
-            verbosity=True
         )
+        monomers_by_type = {}
+
+        # In Network/SAWLC, VOI=True means available space. Membrane must be forbidden.
+        sample_voi = sample._SyntheticSample__voi
+        sample_voi[membrane_mask] = False
+        sample._SyntheticSample__bg_voi = sample_voi.copy()
+
+        for pn_file_rpath in proteins_list:
+            pn_file_apath = ROOT_PATH / pn_file_rpath
+            pn_file = PnFile()
+            pn_params = pn_file.load(pn_file_apath)
+
+            sample.add_set_cproteins(
+                params=pn_params,
+                data_path=ROOT_PATH,
+                surf_dec=0.9,
+                mmer_tries=20,
+                pmer_tries=100,
+                verbosity=True,
+            )
+            # SAWLC reporta inserciones como monomeros (get_num_mmers), no como proteinas independientes.
+            structure_counts = getattr(sample, "_SyntheticSample__structure_counts", {})
+            monomers_by_type[os.path.basename(pn_file_rpath)] = int(
+                structure_counts.get("cprotein", 0)
+            )
+
+        # Attach generated sample so we can reuse the existing save_tomo output contract.
+        tomo._SynthTomo__sample = sample
         
         # Save SAWLC outputs first (density, labels, VTP) using the public API
         output_dir_membrane = Path(output_dir) / f"membrane_{membrane_id:02d}"
@@ -152,15 +184,11 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
         generated_labels = lio.load_mrc(str(generated_lbl_path)).astype(np.int32)
 
         print("\nCombining membrane with proteins...")
-        membrane_mask = membrane_volume > 0
-        # Distance map from membrane voxels; proteins are only kept farther than clearance.
-        dist_to_membrane = ndi.distance_transform_edt(~membrane_mask)
-        protein_allowed_mask = dist_to_membrane > PROTEIN_CLEARANCE_VOXELS
 
         max_protein = float(generated_density.max()) if generated_density.size > 0 else 0.0
         membrane_component = membrane_mask.astype(np.float32) * (MEMBRANE_INTENSITY_SCALE * max(max_protein, 1.0))
         proteins_density = generated_density.copy()
-        proteins_density[~protein_allowed_mask] = 0.0
+        proteins_density[membrane_mask] = 0.0
         combined_volume = proteins_density + membrane_component
         
         print(f"Combined volume range: [{combined_volume.min()}, {combined_volume.max()}]")
@@ -183,7 +211,6 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
         print(f"Saved labels to: {labels_file}")
 
         if DEBUG_OCCUPANCY:
-            total_voxels = membrane_mask.size
             membrane_occ = np.count_nonzero(membrane_mask) / total_voxels
             print(f"[DEBUG] Membrane occupancy before proteins: {membrane_occ*100:.4f}%")
 
@@ -191,20 +218,23 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
             for p_idx, protein_path in enumerate(proteins_list, start=1):
                 entity_id = p_idx
                 protein_name = os.path.basename(protein_path)
-                # Apply the same membrane-exclusion mask used for final outputs.
-                protein_vox = np.logical_and(generated_labels == entity_id, protein_allowed_mask)
+                # Keep voxels outside membrane only, matching final outputs.
+                protein_vox = np.logical_and(generated_labels == entity_id, ~membrane_mask)
                 proteins_accum_vox = np.logical_and(
                     np.logical_and(generated_labels >= 1, generated_labels <= entity_id),
-                    protein_allowed_mask,
+                    ~membrane_mask,
                 )
 
                 inserted_for_type = np.count_nonzero(protein_vox)
+                num_monomers = monomers_by_type.get(protein_name, 0)
                 protein_occ = np.count_nonzero(proteins_accum_vox) / total_voxels
                 total_occ = (np.count_nonzero(membrane_mask) + np.count_nonzero(proteins_accum_vox)) / total_voxels
+                proteins_net_occ = max(total_occ - membrane_occ, 0.0)
                 print(
                     f"[DEBUG] After type {p_idx:02d} ({protein_name}): "
                     f"inserted_vox={inserted_for_type}, "
-                    f"proteins_occ={protein_occ*100:.4f}%, "
+                    f"num_monomers={num_monomers}, "
+                    f"proteins_occ={proteins_net_occ*100:.4f}%, "
                     f"total_occ={total_occ*100:.4f}%"
                 )
 
@@ -215,9 +245,7 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
 
             proteins_threshold = max(float(proteins_density.max()) * PROTEIN_ISO_THRESHOLD_RATIO, 1e-6)
             proteins_mask = proteins_density > proteins_threshold
-            # Safety pass: ensure no protein voxel remains in the exclusion band.
-            proteins_mask = np.logical_and(proteins_mask, protein_allowed_mask)
-            proteins_mask = ndi.binary_opening(proteins_mask, iterations=1)
+            proteins_mask = np.logical_and(proteins_mask, ~membrane_mask)
 
             if np.any(proteins_mask):
                 proteins_poly = pp.iso_surface(proteins_mask.astype(np.float32), th=0.5)

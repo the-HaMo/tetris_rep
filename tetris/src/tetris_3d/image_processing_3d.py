@@ -15,6 +15,18 @@ from scipy.ndimage import gaussian_filter, binary_dilation, binary_closing, bina
 from scipy import signal
 from skimage.morphology import ball
 from typing import Tuple
+import multiprocessing
+import scipy
+try:
+    import pyfftw
+    import scipy.fft
+    # Configurar para usar todos los núcleos disponibles
+    pyfftw.config.NUM_THREADS = multiprocessing.cpu_count()
+    # Interceptar scipy.fft (SciPy moderno)
+    scipy.fft.set_global_backend(pyfftw.interfaces.scipy_fft)
+    print(f"[OPT] PyFFTW activado usando {pyfftw.config.NUM_THREADS} hilos.")
+except ImportError:
+    print("[WARN] PyFFTW no instalado. Correlación 3D usará 1 solo hilo (muy lento).")
 
 
 class ImageProcessing3D:
@@ -39,37 +51,72 @@ class ImageProcessing3D:
         frontier_radius = max_box_size // 2 + margin
         return frontier_radius
     
+    # @staticmethod
+    # def randomly_rotate(data: np.ndarray, 
+    #                    angles: Tuple[float, float, float] = None) -> Tuple[np.ndarray, Tuple[float, float, float]]:
+    #     """
+    #     Paso: Randomly rotate one molecule (3D)
+        
+    #     Rota un volumen 3D aleatoriamente en los 3 ejes.
+        
+    #     Args:
+    #         data: Volumen 3D (Z, Y, X)
+    #         angles: (angle_z, angle_y, angle_x) o None para aleatorio
+            
+    #     Returns:
+    #         Tupla (volumen rotado, ángulos usados)
+    #     """
+    #     if angles is None:
+    #         angles = (
+    #             np.random.uniform(0, 360),
+    #             np.random.uniform(0, 360),
+    #             np.random.uniform(0, 360)
+    #         )
+        
+    #     rotated = data.copy()
+    #     # Rotar en eje Z (plano XY)
+    #     rotated = rotate(rotated, angles[0], axes=(1, 2), reshape=False, order=0, mode='constant', cval=0)
+    #     # Rotar en eje Y (plano XZ)
+    #     rotated = rotate(rotated, angles[1], axes=(0, 2), reshape=False, order=0, mode='constant', cval=0)
+    #     # Rotar en eje X (plano YZ)
+    #     rotated = rotate(rotated, angles[2], axes=(0, 1), reshape=False, order=0, mode='constant', cval=0)
+        
+    #     return rotated, angles
+
+
     @staticmethod
     def randomly_rotate(data: np.ndarray, 
                        angles: Tuple[float, float, float] = None) -> Tuple[np.ndarray, Tuple[float, float, float]]:
         """
-        Paso: Randomly rotate one molecule (3D)
-        
-        Rota un volumen 3D aleatoriamente en los 3 ejes.
-        
-        Args:
-            data: Volumen 3D (Z, Y, X)
-            angles: (angle_z, angle_y, angle_x) o None para aleatorio
-            
-        Returns:
-            Tupla (volumen rotado, ángulos usados)
+        OPTIMIZACIÓN: Rota un volumen 3D en una sola pasada usando una matriz de transformación.
+        3x más rápido que llamar a rotate() tres veces.
         """
+        from scipy.ndimage import affine_transform
+        from scipy.spatial.transform import Rotation as R
+
         if angles is None:
-            angles = (
-                np.random.uniform(0, 360),
-                np.random.uniform(0, 360),
-                np.random.uniform(0, 360)
-            )
+            angles = np.random.uniform(0, 360, size=3)
         
-        rotated = data.copy()
-        # Rotar en eje Z (plano XY)
-        rotated = rotate(rotated, angles[0], axes=(1, 2), reshape=False, order=1, mode='constant', cval=0)
-        # Rotar en eje Y (plano XZ)
-        rotated = rotate(rotated, angles[1], axes=(0, 2), reshape=False, order=1, mode='constant', cval=0)
-        # Rotar en eje X (plano YZ)
-        rotated = rotate(rotated, angles[2], axes=(0, 1), reshape=False, order=1, mode='constant', cval=0)
+        # 1. Crear la matriz de rotación combinada (Z-Y-X)
+        rotation = R.from_euler('zyx', angles, degrees=True)
+        matrix = rotation.as_matrix()
         
-        return rotated, angles
+        # 2. Calcular el centro para rotar sobre el propio eje de la proteína
+        center = np.array(data.shape) / 2.0
+        offset = center - np.dot(matrix, center)
+        
+        # 3. Aplicar la transformación en una sola pasada
+        # order=1 (bilineal) es el balance perfecto entre velocidad y calidad
+        rotated = affine_transform(
+            data, 
+            matrix, 
+            offset=offset, 
+            order=1, 
+            mode='constant', 
+            cval=0.0
+        )
+        
+        return rotated, tuple(angles)
     
     @staticmethod
     def smooth_and_binarize(data: np.ndarray, sigma: float = 1.5, 
@@ -87,12 +134,19 @@ class ImageProcessing3D:
         Returns:
             Volumen binarizado (0 o 1)
         """
-        smoothed = gaussian_filter(data, sigma)
-        if np.max(smoothed) > 0:
-            thresh = max(threshold, np.percentile(smoothed[smoothed > 0], 30))
-        else:
-            thresh = threshold
-        return (smoothed > thresh).astype(np.float32)
+        # smoothed = gaussian_filter(data, sigma)
+        # if np.max(smoothed) > 0:
+        #     thresh = max(threshold, np.percentile(smoothed[smoothed > 0], 30))
+        # else:
+        #     thresh = threshold
+        # return (smoothed > thresh).astype(np.float32)
+        # Si la proteína ya está binarizada o limpia, no apliques gaussian_filter
+        if sigma > 0:
+            data = gaussian_filter(data, sigma)
+        
+        # IMPORTANTE: No uses percentiles dinámicos aquí para el Tetris, 
+        # usa un umbral fijo que coincida con SAWLC.
+        return (data > threshold).astype(np.float32)
     
     @staticmethod
     def threshold_binarize(data: np.ndarray, threshold: float = 50) -> np.ndarray:
@@ -134,7 +188,7 @@ class ImageProcessing3D:
     
     @staticmethod
     def subtract(outer_layer: np.ndarray, inner_layer: np.ndarray, 
-                 penalty: float = 100) -> np.ndarray:
+                 penalty: float = 10000) -> np.ndarray:
         """
         Paso: Subtract (crear In-shell template 3D)
         
@@ -148,11 +202,19 @@ class ImageProcessing3D:
         Returns:
             Template = outer - penalty * inner
         """
-        return outer_layer.astype(np.float32) - penalty * inner_layer.astype(np.float32)
-    
+        # return outer_layer.astype(np.float32) - penalty * inner_layer.astype(np.float32)
+        template = np.zeros_like(outer_layer, dtype=np.float32)
+        # 1. Premio: Solo la cáscara pura
+        shell_mask = np.logical_and(outer_layer > 0, ~(inner_layer > 0))
+        template[shell_mask] = 1.0
+        # 2. Castigo: El núcleo
+        template[inner_layer > 0] = -penalty
+        return template
+
+
     @staticmethod
     def create_in_shell(binary_vol: np.ndarray, 
-                        insertion_distances: Tuple[int, int] = (-2, 0),
+                        insertion_distances: Tuple[int, int] = (0, 2),
                         penalty: float = 100) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Pasos combinados: Smooth, Dilate, Subtract (3D)
@@ -199,13 +261,13 @@ class ImageProcessing3D:
         cmap = signal.correlate(output_binary, template, 'same', 'fft')
         
         # Enmascarar bordes en 3D
-        half = box_size // 2
-        cmap[:half+1, :, :] = 0
-        cmap[:, :half+1, :] = 0
-        cmap[:, :, :half+1] = 0
-        cmap[-half-1:, :, :] = 0
-        cmap[:, -half-1:, :] = 0
-        cmap[:, :, -half-1:] = 0
+        # half = box_size // 2
+        # cmap[:half+1, :, :] = 0
+        # cmap[:, :half+1, :] = 0
+        # cmap[:, :, :half+1] = 0
+        # cmap[-half-1:, :, :] = 0
+        # cmap[:, -half-1:, :] = 0
+        # cmap[:, :, -half-1:] = 0
         
         return cmap
     
@@ -503,13 +565,13 @@ class ImageProcessing3D:
         cmap_roi = signal.correlate(roi_output, template, 'same', 'fft')
         
         # Enmascarar bordes del ROI
-        half = box_size // 2
-        cmap_roi[:half+1, :, :] = 0
-        cmap_roi[:, :half+1, :] = 0
-        cmap_roi[:, :, :half+1] = 0
-        cmap_roi[-half-1:, :, :] = 0
-        cmap_roi[:, -half-1:, :] = 0
-        cmap_roi[:, :, -half-1:] = 0
+        # half = box_size // 2
+        # cmap_roi[:half+1, :, :] = 0
+        # cmap_roi[:, :half+1, :] = 0
+        # cmap_roi[:, :, :half+1] = 0
+        # cmap_roi[-half-1:, :, :] = 0
+        # cmap_roi[:, -half-1:, :] = 0
+        # cmap_roi[:, :, -half-1:] = 0
         
         # Crear C-map completo con ceros
         cmap_full = np.zeros_like(output_binary)
@@ -560,13 +622,13 @@ class ImageProcessing3D:
         cmap_small = signal.correlate(output_small, template_small, 'same', 'fft')
         
         # Enmascarar bordes en escala pequeña
-        half_small = (box_size // ds) // 2
-        cmap_small[:half_small+1, :, :] = 0
-        cmap_small[:, :half_small+1, :] = 0
-        cmap_small[:, :, :half_small+1] = 0
-        cmap_small[-half_small-1:, :, :] = 0
-        cmap_small[:, -half_small-1:, :] = 0
-        cmap_small[:, :, -half_small-1:] = 0
+        # half_small = (box_size // ds) // 2
+        # cmap_small[:half_small+1, :, :] = 0
+        # cmap_small[:, :half_small+1, :] = 0
+        # cmap_small[:, :, :half_small+1] = 0
+        # cmap_small[-half_small-1:, :, :] = 0
+        # cmap_small[:, -half_small-1:, :] = 0
+        # cmap_small[:, :, -half_small-1:] = 0
         
         # Encontrar máximo en escala pequeña
         max_small = np.unravel_index(cmap_small.argmax(), cmap_small.shape)
@@ -602,13 +664,13 @@ class ImageProcessing3D:
         cmap_full = np.zeros_like(output_binary)
         cmap_full[z_start:z_end, y_start:y_end, x_start:x_end] = cmap_local
         
-        # Enmascarar bordes globales
-        half = box_size // 2
-        cmap_full[:half+1, :, :] = 0
-        cmap_full[:, :half+1, :] = 0
-        cmap_full[:, :, :half+1] = 0
-        cmap_full[-half-1:, :, :] = 0
-        cmap_full[:, -half-1:, :] = 0
-        cmap_full[:, :, -half-1:] = 0
+        # # Enmascarar bordes globales
+        # half = box_size // 2
+        # cmap_full[:half+1, :, :] = 0
+        # cmap_full[:, :half+1, :] = 0
+        # cmap_full[:, :, :half+1] = 0
+        # cmap_full[-half-1:, :, :] = 0
+        # cmap_full[:, -half-1:, :] = 0
+        # cmap_full[:, :, -half-1:] = 0
         
         return cmap_full

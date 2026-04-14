@@ -1,354 +1,78 @@
-"""
-Tetris Algorithm 3D 
-"""
-
-import time
 import numpy as np
-import os
-from typing import Tuple
-from image_processing_3d import ImageProcessing3D
-from parser_3d import Parser3D
-
-# np.random.seed(42)
-
-PROTEINS_LIST = [
-    "in_10A/4v4r_10A.pns",
-    # "in_10A/3j9i_10A.pns",
-    # "in_10A/5mrc_10A.pns",
-    # "in_10A/4v7r_10A.pns",
-    # "in_10A/2uv8_10A.pns",
-    # "in_10A/4v94_10A.pns",
-    # "in_10A/4cr2_10A.pns",
-    # "in_10A/3qm1_10A.pns",
-    # "in_10A/3h84_10A.pns",
-    # "in_10A/3gl1_10A.pns",
-    # "in_10A/3d2f_10A.pns",
-    # "in_10A/3cf3_10A.pns",
-    # "in_10A/2cg9_10A.pns",
-    # "in_10A/1u6g_10A.pns",
-    # "in_10A/1s3x_10A.pns",
-    # "in_10A/1qvr_10A.pns",
-    # "in_10A/1bxn_10A.pns",
-]
-
-VOI_SHAPE = (300, 300, 250)
-VOXEL_SIZE = 10.0  # nm
-FACTOR_DOWNSAMPLE = 2 
-STEP_GAUSSIAN = 25
-INSERTION_DISTANCES = (-2, 0) 
-
-EXPORT_VTP = True
-VTP_BASE_NAME = "tomo_000_poly"
+from scipy import signal
 
 class Tetris3D:
-    """
-    Algoritmo Tetris 3D - trabaja con volúmenes completos.
-    """
-    
-    def __init__(self, 
-                 dimensions: Tuple[int, int, int] = VOI_SHAPE, # voxel 
-                 sigma: float = 1.5, # filtro gaussiano
-                 threshold: float = 100,  # umbral para binarización
-                 insertion_distances: Tuple[int, int] = INSERTION_DISTANCES):
-        
+    def __init__(self, dimensions=(500, 500, 250), sigma=1.5, threshold=100):
         self.dimensions = np.array(dimensions)
         self.sigma = sigma
         self.threshold = threshold
-        self.insertion_distances = insertion_distances
-        
         self.reset()
     
     def reset(self):
-        """Reinicia el volumen de salida."""
         self.output_volume = np.zeros(self.dimensions, dtype=np.float32)
-        self.insertion_labels = np.zeros(self.dimensions, dtype=np.int32)  # Volumen de labels
         self.all_coordinates = []
-        self.all_molecule_types = []  # Tipo de cada molécula insertada
-        self._output_binary = None  # mapa del volumen binarizado
-        self._current_frontier = None  # mapa de la frontera
-        self._step_count = 0  # Contador para gaussian cada 100 pasos
-    
+
     def get_occupancy(self) -> float:
-        """Calcula la ocupancia actual del volumen (porcentaje de vóxeles ocupados)."""
         occupied = np.count_nonzero(self.output_volume > self.threshold)
-        total = np.prod(self.dimensions)
-        return occupied / total
-    
-    def place_molecule_3d(self, position: Tuple[int, int, int], molecule: np.ndarray, molecule_id: int = 0):
-        """
-        Coloca una molécula 3D en el volumen de salida.
-        
-        Args:
-            position: Coordenadas (z, y, x) centrales
-            molecule: Volumen 3D de la molécula
-            molecule_id: ID de la molécula para el volumen de labels
-        """
-        size = molecule.shape
-        half = np.array(size) // 2
+        return occupied / self.output_volume.size
+
+    def place_molecule_3d(self, position, molecule, molecule_id):
         z, y, x = position
-        
-        # Calcular límites en el output
-        z_start = max(0, z - half[0]) # no salir del volumen
-        z_end = min(self.dimensions[0], z + half[0])
-        y_start = max(0, y - half[1])
-        y_end = min(self.dimensions[1], y + half[1])
-        x_start = max(0, x - half[2])
-        x_end = min(self.dimensions[2], x + half[2])
-        
-        # Calcular límites en la molécula
-        mol_z_start = half[0] - (z - z_start)
-        mol_z_end = half[0] + (z_end - z)
-        mol_y_start = half[1] - (y - y_start)
-        mol_y_end = half[1] + (y_end - y)
-        mol_x_start = half[2] - (x - x_start)
-        mol_x_end = half[2] + (x_end - x)
-        
-        # Añadir molécula al output
-        mol_region = molecule[mol_z_start:mol_z_end, mol_y_start:mol_y_end, mol_x_start:mol_x_end]
-        self.output_volume[z_start:z_end, y_start:y_end, x_start:x_end] += mol_region
-        
-        mol_mask = mol_region > self.threshold 
-        self.insertion_labels[z_start:z_end, y_start:y_end, x_start:x_end][mol_mask] = molecule_id
-    
-    def insert_molecule_3d(self, molecule: np.ndarray, mol_name: str = "mol") -> bool:
-        """
-        Inserta una molécula 3D siguiendo el algoritmo Tetris.
-        Flujo: Rotate → Smooth&Binarize → Dilate → Subtract → Correlate → Find Max → Place
-        
-        Args:
-            molecule: Volumen 3D de la molécula
-            mol_name: Nombre para logging
+        m_shape = np.array(molecule.shape)
+        half = m_shape // 2
+        # Coordenadas exactas garantizadas por el motor de inserción
+        z_s, z_e = z-half[0], z-half[0]+m_shape[0]
+        y_s, y_e = y-half[1], y-half[1]+m_shape[1]
+        x_s, x_e = x-half[2], x-half[2]+m_shape[2]
+        self.output_volume[z_s:z_e, y_s:y_e, x_s:x_e] += molecule
+
+    def insert_molecule_3d(self, molecule_template, molecule_rotated, mol_name, allowed_mask, target_coord, box_size):
+        step = len(self.all_coordinates) + 1
+        z_t, y_t, x_t = target_coord
+        pad = int(box_size * 1.5) 
+        z_s, z_e = max(0, z_t-pad), min(self.dimensions[0], z_t+pad)
+        y_s, y_e = max(0, y_t-pad), min(self.dimensions[1], y_t+pad)
+        x_s, x_e = max(0, x_t-pad), min(self.dimensions[2], x_t+pad)
+
+        local_vol = self.output_volume[z_s:z_e, y_s:y_e, x_s:x_e]
+        local_bin = (local_vol > self.threshold).astype(np.float32)
+
+        # Semilla inicial: chequeo estricto de integridad
+        if local_bin.max() == 0:
+            h = np.array(molecule_rotated.shape) // 2
+            dz_s, dz_e = z_t-h[0], z_t-h[0]+molecule_rotated.shape[0]
+            dy_s, dy_e = y_t-h[1], y_t-h[1]+molecule_rotated.shape[1]
+            dx_s, dx_e = x_t-h[2], x_t-h[2]+molecule_rotated.shape[2]
             
-        Returns:
-            True si se insertó, False si saturación
-        """
-        step = len(self.all_coordinates) + 1 # debug
-        center = tuple(self.dimensions // 2)
-        
-        # STEP 1: RANDOM ROTATE
-        rotated, _ = ImageProcessing3D.randomly_rotate(molecule)
-        box_size = max(rotated.shape) # diametro de cada proteína 
-        
-        # STEP 2: FIRST MOLECULE?
-        if len(self.all_coordinates) == 0:
-            self.place_molecule_3d(center, rotated, molecule_id=step)
-            self.all_coordinates.append(center)
-            self.all_molecule_types.append(mol_name)
+            if (dz_s >= 0 and dz_e <= self.dimensions[0] and dy_s >= 0 and dy_e <= self.dimensions[1] and dx_s >= 0 and dx_e <= self.dimensions[2]):
+                if not np.any(self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] >= 500.0):
+                    self.place_molecule_3d((z_t, y_t, x_t), molecule_rotated, step)
+                    self.all_coordinates.append((z_t, y_t, x_t))
+                    return 'inserted'
+            return 'saturated'
+
+        cmap = signal.correlate(local_bin, molecule_template, mode='same', method='fft')
+        cmap = np.where(allowed_mask[z_s:z_e, y_s:y_e, x_s:x_e], cmap, -1e9) 
+
+        temp_cmap = cmap.copy()
+        for _ in range(50):
+            if temp_cmap.max() <= -1e8: return 'saturated'
+            idx = np.unravel_index(temp_cmap.argmax(), temp_cmap.shape)
+            z, y, x = idx[0] + z_s, idx[1] + y_s, idx[2] + x_s
+            h = np.array(molecule_rotated.shape) // 2
+            dz_s, dz_e = z-h[0], z-h[0]+molecule_rotated.shape[0]
+            dy_s, dy_e = y-h[1], y-h[1]+molecule_rotated.shape[1]
+            dx_s, dx_e = x-h[2], x-h[2]+molecule_rotated.shape[2]
+
+            # GARANTÍA: Si se sale del cuadro, descarta. No corta proteínas.
+            if (dz_s < 0 or dz_e > self.dimensions[0] or dy_s < 0 or dy_e > self.dimensions[1] or dx_s < 0 or dx_e > self.dimensions[2]):
+                temp_cmap[idx] = -1e9; continue
             
-            # Inicializar mapa (binary volume + frontier)
-            self._output_binary = ImageProcessing3D.smooth_and_binarize(
-                self.output_volume, self.sigma, self.threshold
-            )
-            self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
+            if np.any((self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] >= 500.0) & (molecule_rotated > self.threshold)):
+                temp_cmap[idx] = -1e9; continue
             
-            print(f"Paso {step}: {mol_name} insertada en centro {center}")
-            return True
-        
-        # STEP 3: SMOOTH AND BINARIZE
-        rotated_binary = ImageProcessing3D.smooth_and_binarize(
-            rotated, self.sigma, self.threshold
-        )
-        
-        # STEP 4 AND STEP 5: DILATE AND SUBTRACT (CREATE IN-SHELL TEMPLATE)
-        template, outer_layer, inner_layer = ImageProcessing3D.create_in_shell(
-            rotated_binary, self.insertion_distances  # (-2, 0)
-        )
-    
-        # STEP 6: BINARIZE OUTPUT VOLUME
-        # Estrategia híbrida: Threshold rápido + Gaussian 
-        self._step_count += 1
-        
-        if self._step_count % STEP_GAUSSIAN == 0:
-            self._output_binary = ImageProcessing3D.smooth_and_binarize(
-                self.output_volume, self.sigma, self.threshold
-            )
-            self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
-        else:
-            self._output_binary = ImageProcessing3D.threshold_binarize(
-                self.output_volume, self.threshold
-            )
-        
-        # STEP 7: CORRELATE
-        cmap = ImageProcessing3D.correlate_downsampled(
-            self._output_binary, template, box_size,
-            downsample_factor=FACTOR_DOWNSAMPLE,  # Factor 2
-            refine=True,          # Refinar en región pequeña
-            refine_size=35        # ±35 voxeles: suficiente para (66x66x66)
-        )
-        
-  
-        # STEP 8: FIND MAXIMUM POSITION
-        if cmap.max() <= 0:
-            print(f"  Paso {step}: SATURACIÓN - No se puede insertar {mol_name}")
-            return False
-        
-       
-        # STEP 9: INSERT AT BEST POSITION
-        coord = ImageProcessing3D.find_maximum_position(cmap)
-        self.place_molecule_3d(coord, rotated, molecule_id=step)
-        self.all_coordinates.append(coord) # debug
-        self.all_molecule_types.append(mol_name) # debug
-        
-     
-       # Solo actualizamos el trozo donde acabamos de meter la proteína
-        self._output_binary = ImageProcessing3D.update_binary_local(
-            self._output_binary,  # El binario anterior
-            self.output_volume,   # El volumen con la nueva proteína
-            coord,                # Dónde la pusimos
-            box_size,             # Qué tamaño tiene
-            sigma=self.sigma,
-            threshold=self.threshold,
-            margin=10             # Un poco de margen para el filtro Gaussiano
-        )
-        
-        # Actualizar frontera localmente (solo la región afectada)
-        if self._current_frontier is None:
-            self._current_frontier = ImageProcessing3D.compute_frontier(self._output_binary)
-        else:
-            radius = box_size // 2  # Radio de la proteína insertada
-            margin = 1              # Margen pequeño para ball() en dilatación
-            
-            self._current_frontier = ImageProcessing3D.update_frontier_local(
-                self._current_frontier,
-                self._output_binary,
-                coord,
-                box_size,
-                radius=radius,
-                margin=margin
-            )
-         
-        # REPORT OCCUPANCY & RETURN
-        occupancy = self.get_occupancy()
-        print(f"  Paso {step}: {mol_name} insertada en {coord} - Ocupancia: {occupancy*100:.4f}%")
-        return True
-
-
-def run_tetris_3d():
-    """Ejecuta el algoritmo Tetris 3D."""
-    
-    # Rutas
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_dir = os.path.join(base_dir, '../data')
-    output_dir = os.path.join(base_dir, '../data', 'data_generated', 'output', 'output_tetris')
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Cargar proteínas
-    print(f"\nCargando {len(PROTEINS_LIST)} proteínas:")
-    molecules = {}
-    molecule_params = {}
-    for protein_path in PROTEINS_LIST:
-        full_path = os.path.join(data_dir, protein_path)
-        if os.path.exists(full_path):
-            name = os.path.basename(protein_path)
-            try:
-                volume, params = Parser3D.load_protein(full_path, data_dir)
-                molecules[name] = volume
-                molecule_params[name] = params
-                occupancy = params.get('PMER_OCC', 'N/A')
-                print(f"  {name}: {volume.shape} - Ocupancia objetivo: {occupancy}")
-            except Exception as e:
-                print(f"  {name}: Error - {e}")
-        else:
-            print(f"  {protein_path}: NO ENCONTRADO")
-    
-    if len(molecules) == 0:
-        print("\n¡ERROR! No se encontraron proteínas.")
-        return None
-        
-    # Crear Tetris 3D
-    tetris = Tetris3D(
-        dimensions=VOI_SHAPE,
-        sigma=1.5,
-        threshold=1,
-        insertion_distances=(-2, 0)
-    )
-    
-    # Insertar moléculas
-    mol_list = list(molecules.values())
-    mol_names = list(molecules.keys())
-    mol_occupancies = {}
-    
-    # Extraer ocupancias objetivo de cada proteína
-    for name in mol_names:
-        params = molecule_params.get(name, {})
-        try:
-            mol_occupancies[name] = float(params.get('PMER_OCC', 0.5))
-        except ValueError:
-            mol_occupancies[name] = 0.5  # Default si no se puede leer
-    
-    # Usar la ocupancia máxima como objetivo global
-    target_occupancy = max(mol_occupancies.values())
-    print(f"\n Objetivo: Ocupancia {target_occupancy*100:.4f}% o saturación")
-    
-    inserted = 0
-    inserted_per_protein = {name: 0 for name in mol_names}
-    
-    # Bucle infinito - solo se detiene por ocupancia o saturación
-    while True:
-        mol_idx = inserted % len(mol_list)
-        mol_name = mol_names[mol_idx]
-        
-        success = tetris.insert_molecule_3d(
-            mol_list[mol_idx],
-            mol_name=mol_name
-        )
-        if success:
-            inserted += 1
-            inserted_per_protein[mol_name] += 1
-
-            # Verificar objetivo en cada inserción 
-            current_occupancy = tetris.get_occupancy()
-            if current_occupancy >= target_occupancy:
-                print(f"\nOCUPANCIA OBJETIVO: {current_occupancy*100:.4f}%")
-                print(f"  Proteínas insertadas: {inserted}")
-                for prot_name, count in inserted_per_protein.items():
-                    print(f"    {prot_name}: {count}")
-                break
-            
-        else:
-            # Saturación - no caben más moléculas
-            current_occupancy = tetris.get_occupancy()
-            print(f"\nSATURACIÓN - Ocupancia final: {current_occupancy*100:.4f}%")
-            print(f"  Proteínas insertadas: {inserted}")
-            for prot_name, count in inserted_per_protein.items():
-                print(f"    {prot_name}: {count}")
-            break
-    
-    # Guardar resultado
-    output_path = os.path.join(output_dir, 'tetris_3d_output.mrc')
-    Parser3D.save_output_files(
-        output_volume=tetris.output_volume,
-        insertion_labels=tetris.insertion_labels,
-        coordinates=tetris.all_coordinates,
-        molecule_types=tetris.all_molecule_types,
-        filepath=output_path,
-        voxel_size=10.0
-    )
-
-    if EXPORT_VTP:
-        Parser3D.save_vtp_files(
-            output_volume=tetris.output_volume,
-            insertion_labels=tetris.insertion_labels,
-            output_dir=output_dir,
-            base_name=VTP_BASE_NAME,
-            voxel_size=VOXEL_SIZE,
-            iso_level=None, # percentil automático
-            sigma=tetris.sigma,
-            threshold=tetris.threshold
-        )
-    
-    return tetris
-
-if __name__ == '__main__':
-    start_time = time.time()
-    
-    tetris = run_tetris_3d()
-    
-    end_time = time.time()
-    elapsed_seconds = end_time - start_time
-    
-    minutes = int(elapsed_seconds // 60)
-    seconds = elapsed_seconds % 60
-
-    print(f"\nTiempo total de ejecución: {minutes} min {seconds:.2f} s")
+            self.place_molecule_3d((z, y, x), molecule_rotated, step)
+            self.all_coordinates.append((z, y, x))
+            print(f"    -> Paso {step}: {mol_name} en {(z,y,x)} | Occ: {self.get_occupancy()*100:.4f}%")
+            return 'inserted'
+        return 'saturated'
