@@ -88,8 +88,7 @@ class ImageProcessing3D:
     def randomly_rotate(data: np.ndarray, 
                        angles: Tuple[float, float, float] = None) -> Tuple[np.ndarray, Tuple[float, float, float]]:
         """
-        OPTIMIZACIÓN: Rota un volumen 3D en una sola pasada usando una matriz de transformación.
-        3x más rápido que llamar a rotate() tres veces.
+        Rota un volumen 3D en una sola pasada usando una matriz de transformación.
         """
         from scipy.ndimage import affine_transform
         from scipy.spatial.transform import Rotation as R
@@ -144,8 +143,7 @@ class ImageProcessing3D:
         if sigma > 0:
             data = gaussian_filter(data, sigma)
         
-        # IMPORTANTE: No uses percentiles dinámicos aquí para el Tetris, 
-        # usa un umbral fijo que coincida con SAWLC.
+        # un umbral fijo que coincida con SAWLC.
         return (data > threshold).astype(np.float32)
     
     @staticmethod
@@ -188,7 +186,7 @@ class ImageProcessing3D:
     
     @staticmethod
     def subtract(outer_layer: np.ndarray, inner_layer: np.ndarray, 
-                 penalty: float = 10000) -> np.ndarray:
+                 penalty: float = 100) -> np.ndarray:
         """
         Paso: Subtract (crear In-shell template 3D)
         

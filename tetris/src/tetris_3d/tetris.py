@@ -45,7 +45,7 @@ class Tetris3D:
             dx_s, dx_e = x_t-h[2], x_t-h[2]+molecule_rotated.shape[2]
             
             if (dz_s >= 0 and dz_e <= self.dimensions[0] and dy_s >= 0 and dy_e <= self.dimensions[1] and dx_s >= 0 and dx_e <= self.dimensions[2]):
-                if not np.any(self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] >= 500.0):
+                if not np.any(self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] > self.threshold):
                     self.place_molecule_3d((z_t, y_t, x_t), molecule_rotated, step)
                     self.all_coordinates.append((z_t, y_t, x_t))
                     return 'inserted'
@@ -68,7 +68,7 @@ class Tetris3D:
             if (dz_s < 0 or dz_e > self.dimensions[0] or dy_s < 0 or dy_e > self.dimensions[1] or dx_s < 0 or dx_e > self.dimensions[2]):
                 temp_cmap[idx] = -1e9; continue
             
-            if np.any((self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] >= 500.0) & (molecule_rotated > self.threshold)):
+            if np.any((self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] > self.threshold) & (molecule_rotated > self.threshold)):
                 temp_cmap[idx] = -1e9; continue
             
             self.place_molecule_3d((z, y, x), molecule_rotated, step)

@@ -143,7 +143,6 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
             v_size=VOI_VSIZE,
             offset=(0, 0, 0),
         )
-        monomers_by_type = {}
 
         # In Network/SAWLC, VOI=True means available space. Membrane must be forbidden.
         sample_voi = sample._SyntheticSample__voi
@@ -162,11 +161,6 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
                 mmer_tries=20,
                 pmer_tries=100,
                 verbosity=True,
-            )
-            # SAWLC reporta inserciones como monomeros (get_num_mmers), no como proteinas independientes.
-            structure_counts = getattr(sample, "_SyntheticSample__structure_counts", {})
-            monomers_by_type[os.path.basename(pn_file_rpath)] = int(
-                structure_counts.get("cprotein", 0)
             )
 
         # Attach generated sample so we can reuse the existing save_tomo output contract.
@@ -226,15 +220,12 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
                 )
 
                 inserted_for_type = np.count_nonzero(protein_vox)
-                num_monomers = monomers_by_type.get(protein_name, 0)
                 protein_occ = np.count_nonzero(proteins_accum_vox) / total_voxels
                 total_occ = (np.count_nonzero(membrane_mask) + np.count_nonzero(proteins_accum_vox)) / total_voxels
-                proteins_net_occ = max(total_occ - membrane_occ, 0.0)
                 print(
                     f"[DEBUG] After type {p_idx:02d} ({protein_name}): "
                     f"inserted_vox={inserted_for_type}, "
-                    f"num_monomers={num_monomers}, "
-                    f"proteins_occ={proteins_net_occ*100:.4f}%, "
+                    f"proteins_occ={protein_occ*100:.4f}%, "
                     f"total_occ={total_occ*100:.4f}%"
                 )
 

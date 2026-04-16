@@ -10,24 +10,24 @@ ROOT_PATH = Path(__file__).resolve().parents[2] / "data"
 MEMBRANES_PATH = ROOT_PATH / "templates" / "membranes"
 
 MEMBRANE_FILES = [
-    "tomo_mem_lbls_0.mrc",
+    # "tomo_mem_lbls_0.mrc",
     # "tomo_mem_lbls_1.mrc",
     # "tomo_mem_lbls_2.mrc",
-    # "tomo_mem_lbls_3.mrc",
+    "tomo_mem_lbls_3.mrc",
 ]
 
 PROTEINS_LIST = [
-    "in_10A/4v4r_10A.pns",
+    # "in_10A/4v4r_10A.pns",
     # "in_10A/3j9i_10A.pns",
     "in_10A/5mrc_10A.pns",
     # "in_10A/4v7r_10A.pns",
     # "in_10A/2uv8_10A.pns",
     "in_10A/4v94_10A.pns",
-    "in_10A/4cr2_10A.pns",
+    # "in_10A/4cr2_10A.pns",
     # "in_10A/3qm1_10A.pns",
     # "in_10A/3h84_10A.pns",
     # "in_10A/3gl1_10A.pns",
-    "in_10A/3d2f_10A.pns",
+    # "in_10A/3d2f_10A.pns",
     # "in_10A/3cf3_10A.pns",
     # "in_10A/2cg9_10A.pns",
     # "in_10A/1u6g_10A.pns",
@@ -41,21 +41,20 @@ PROTEIN_ISO_THRESHOLD_RATIO = 0.08
 MEMBRANE_INTENSITY_SCALE = 0.35
 VOI_VSIZE = 10
 
-def _crop_volume(vol, threshold):
-    """Elimina el aire del archivo original para permitir que la densidad llegue al borde."""
+def crop_volume(vol, threshold):
+    """densidad real de la proteína"""
     coords = np.argwhere(vol > threshold)
     if coords.size == 0: return vol
     z0, y0, x0 = coords.min(axis=0)
     z1, y1, x1 = coords.max(axis=0) + 1
     return vol[z0:z1, y0:y1, x0:x1]
 
-def _pick_seed(allowed_mask, output_volume, threshold, box_size):
+def pick_seed(allowed_mask, output_volume, threshold, box_size):
     """Muestreo uniforme para llenar bordes igual que el centro."""
     half = box_size // 2
     z_dim, y_dim, x_dim = output_volume.shape
     empty = allowed_mask & (output_volume <= threshold)
     viable = np.zeros_like(empty, dtype=bool)
-    # Permite que el centro esté en el radio exacto (el borde de la caja toca 0)
     viable[half:z_dim-half, half:y_dim-half, half:x_dim-half] = empty[half:z_dim-half, half:y_dim-half, half:x_dim-half]
     candidates = np.argwhere(viable)
     if len(candidates) == 0: return None
@@ -65,13 +64,15 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
     print(f"\nProcessing Tomogram: {os.path.basename(membrane_mrc_path)}")
     start_time = time.time()
     membrane_volume = lio.load_mrc(str(membrane_mrc_path)).astype(np.float32)
-    allowed_mask = ~(membrane_volume > 0)
+    allowed_mask = ~(membrane_volume > 0)   
+    total_voxels = allowed_mask.size
+    membrane_occ = np.count_nonzero(~allowed_mask) / total_voxels
+    print(f"\nMembrane occupancy before proteins: {membrane_occ*100:.4f}%")
     
     molecules = []
     for p_path in proteins_list:
         vol, _ = Parser3D.load_protein(str(ROOT_PATH / p_path), str(ROOT_PATH))
-        # EL SECRETO: Recortar la proteína para quitar el padding interno
-        vol_cropped = _crop_volume(vol, vol.max() * PROTEIN_ISO_THRESHOLD_RATIO)
+        vol_cropped = crop_volume(vol, vol.max() * PROTEIN_ISO_THRESHOLD_RATIO)
         molecules.append((os.path.basename(p_path), vol_cropped))
 
     global_threshold = molecules[0][1].max() * PROTEIN_ISO_THRESHOLD_RATIO
@@ -79,9 +80,13 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
     tetris_obj.output_volume[~allowed_mask] = 500.0 
 
     total_inserted = 0
-    for name, volume in molecules:
+    per_type_summary = []
+    for type_idx, (name, volume) in enumerate(molecules, start=1):
         box_size = max(volume.shape)
-        current_target = _pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
+        inserted_before = total_inserted
+        current_target = pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
+        if current_target is not None:
+            print(f"[!] new seed {current_target}")
         consecutive_failures = 0
         
         while consecutive_failures < 10:
@@ -97,13 +102,37 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
                 current_target = tetris_obj.all_coordinates[-1]
             else:
                 consecutive_failures += 1
-                current_target = _pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
+                current_target = pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
+                if current_target is not None:
+                    print(f"[!] No space. New seed {current_target}")
+
+        num_monomers = total_inserted - inserted_before
+        total_occ = tetris_obj.get_occupancy()
+        proteins_occ = max(total_occ - membrane_occ, 0.0)
+        inserted_vox = int(round(proteins_occ * total_voxels))
+        per_type_summary.append((type_idx, name, inserted_vox, num_monomers, proteins_occ, total_occ))
 
     final = np.copy(tetris_obj.output_volume)
     final[~allowed_mask] = 0.0
     combined = final + ((~allowed_mask).astype(np.float32) * (MEMBRANE_INTENSITY_SCALE * final.max()))
     lio.write_mrc(combined, str(Path(output_dir)/f"membrane_{membrane_id:02d}/tomo_den.mrc"), v_size=VOI_VSIZE)
-    print(f"DONE: {total_inserted} inserted in {time.time()-start_time:.2f}s")
+
+    print(f"\nMembrane occupancy before proteins: {membrane_occ*100:.4f}%")
+    for type_idx, name, inserted_vox, num_monomers, proteins_occ, total_occ in per_type_summary:
+        print(
+            f"After type {type_idx:02d} ({name}): "
+            f"inserted_vox={inserted_vox}, "
+            f"num_monomers={num_monomers}, "
+            f"proteins_occ={proteins_occ*100:.4f}%, "
+            f"total_occ={total_occ*100:.4f}%"
+        )
+
+    print(f"total_occ = {tetris_obj.get_occupancy()*100:.4f}%")
+
+    total_time = time.time() - start_time
+    total_minutes = int(total_time // 60)
+    total_seconds = total_time % 60
+    print(f"DONE: {total_inserted} inserted in {total_minutes}m {total_seconds:.2f}s")
 
 if __name__ == "__main__":
     insert_proteins_in_membrane(MEMBRANES_PATH / MEMBRANE_FILES[0], PROTEINS_LIST, OUT_DIR, 0)
