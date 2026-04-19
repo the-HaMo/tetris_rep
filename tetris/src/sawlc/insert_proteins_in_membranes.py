@@ -21,8 +21,8 @@ MEMBRANES_PATH = ROOT_PATH / "templates" / "membranes"
 MEMBRANE_FILES = [
     # "tomo_mem_lbls_0.mrc",
     # "tomo_mem_lbls_1.mrc",
-    "tomo_mem_lbls_2.mrc",
-    # "tomo_mem_lbls_3.mrc",
+    # "tomo_mem_lbls_2.mrc",
+    "tomo_mem_lbls_3.mrc",
  ]
 
 # Proteins to insert
@@ -46,7 +46,7 @@ PROTEINS_LIST = [
 ]
 
 # Output directory
-OUT_DIR = ROOT_PATH / "data_generated" / "output" / "output_proteins_in_membranes"
+OUT_DIR = ROOT_PATH / "data_generated" / "output" / "output_proteins_sawcl"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 VOI_VSIZE = 10  # A/vx
@@ -58,6 +58,20 @@ DEBUG_OCCUPANCY = True
 
 # Set random seed for reproducibility
 np.random.seed(42)
+
+def sorted_proteinSizes(proteins_list):
+    def protein_size(protein_path):
+        params = PnFile().load(ROOT_PATH / protein_path)
+        mmer_path = params["MMER_SVOL"]
+        if mmer_path.startswith("/"):
+            mmer_path = "." + mmer_path
+        return np.prod(lio.load_mrc(str(ROOT_PATH / mmer_path)).shape)
+
+    return sorted(
+        proteins_list,
+        key=protein_size,
+        reverse=True
+    )
 
 
 def add_uniform_poly_labels(poly, entity_id, type_id):
@@ -143,6 +157,7 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
             v_size=VOI_VSIZE,
             offset=(0, 0, 0),
         )
+        monomers_by_type = {}
 
         # In Network/SAWLC, VOI=True means available space. Membrane must be forbidden.
         sample_voi = sample._SyntheticSample__voi
@@ -161,6 +176,10 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
                 mmer_tries=20,
                 pmer_tries=100,
                 verbosity=True,
+            )
+            protein_name = os.path.basename(pn_file_rpath)
+            monomers_by_type[protein_name] = int(
+                sample._SyntheticSample__structure_counts.get('cprotein', 0)
             )
 
         # Attach generated sample so we can reuse the existing save_tomo output contract.
@@ -220,10 +239,12 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
                 )
 
                 inserted_for_type = np.count_nonzero(protein_vox)
+                monomer_count = monomers_by_type.get(protein_name, 0)
                 protein_occ = np.count_nonzero(proteins_accum_vox) / total_voxels
                 total_occ = (np.count_nonzero(membrane_mask) + np.count_nonzero(proteins_accum_vox)) / total_voxels
                 print(
                     f"[DEBUG] After type {p_idx:02d} ({protein_name}): "
+                    f"monomers={monomer_count}, "
                     f"inserted_vox={inserted_for_type}, "
                     f"proteins_occ={protein_occ*100:.4f}%, "
                     f"total_occ={total_occ*100:.4f}%"
@@ -302,7 +323,7 @@ def main():
         
         result = insert_proteins_in_membrane(
             membrane_path,
-            PROTEINS_LIST,
+            sorted_proteinSizes(PROTEINS_LIST),
             OUT_DIR,
             membrane_id=idx
         )

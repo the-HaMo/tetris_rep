@@ -22,7 +22,7 @@ PROTEINS_LIST = [
     "in_10A/5mrc_10A.pns",
     # "in_10A/4v7r_10A.pns",
     # "in_10A/2uv8_10A.pns",
-    "in_10A/4v94_10A.pns",
+    # "in_10A/4v94_10A.pns",
     # "in_10A/4cr2_10A.pns",
     # "in_10A/3qm1_10A.pns",
     # "in_10A/3h84_10A.pns",
@@ -36,10 +36,18 @@ PROTEINS_LIST = [
 ]
 
 
-OUT_DIR = ROOT_PATH / "data_generated" / "output" / "output_proteins_tetris_final"
+OUT_DIR = ROOT_PATH / "data_generated" / "output" / "output_proteins_tetris"
 PROTEIN_ISO_THRESHOLD_RATIO = 0.08
 MEMBRANE_INTENSITY_SCALE = 0.35
 VOI_VSIZE = 10
+TRIES_CLUSTERING = 10
+
+def sorted_proteinSizes(proteins_list):
+    return sorted(
+        proteins_list,
+        key=lambda x: Parser3D.load_protein(str(ROOT_PATH / x), str(ROOT_PATH))[0].shape[0],
+        reverse=True
+    )
 
 def crop_volume(vol, threshold):
     """densidad real de la proteína"""
@@ -89,7 +97,7 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
             print(f"[!] new seed {current_target}")
         consecutive_failures = 0
         
-        while consecutive_failures < 10:
+        while consecutive_failures < TRIES_CLUSTERING:
             if current_target is None: break
             rotated, _ = ImageProcessing3D.randomly_rotate(volume)
             rotated_bin = ImageProcessing3D.smooth_and_binarize(rotated, 1.5, global_threshold)
@@ -115,7 +123,10 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
     final = np.copy(tetris_obj.output_volume)
     final[~allowed_mask] = 0.0
     combined = final + ((~allowed_mask).astype(np.float32) * (MEMBRANE_INTENSITY_SCALE * final.max()))
-    lio.write_mrc(combined, str(Path(output_dir)/f"membrane_{membrane_id:02d}/tomo_den.mrc"), v_size=VOI_VSIZE)
+    tomo_idx = Path(membrane_mrc_path).stem.split("_")[-1]
+    num_types = len(proteins_list)
+    output_mrc = Path(output_dir) / f"tomo{tomo_idx}_den{num_types}.mrc"
+    lio.write_mrc(combined, str(output_mrc), v_size=VOI_VSIZE)
 
     print(f"\nMembrane occupancy before proteins: {membrane_occ*100:.4f}%")
     for type_idx, name, inserted_vox, num_monomers, proteins_occ, total_occ in per_type_summary:
@@ -135,4 +146,4 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
     print(f"DONE: {total_inserted} inserted in {total_minutes}m {total_seconds:.2f}s")
 
 if __name__ == "__main__":
-    insert_proteins_in_membrane(MEMBRANES_PATH / MEMBRANE_FILES[0], PROTEINS_LIST, OUT_DIR, 0)
+    insert_proteins_in_membrane(MEMBRANES_PATH / MEMBRANE_FILES[0], sorted_proteinSizes(PROTEINS_LIST), OUT_DIR, 0)

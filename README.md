@@ -2,7 +2,7 @@
 
 
 # SIZE OF PROTEINS
-| Proteína (ID) | Dimensiones (Z, Y, X) | Volumen Total (voxels) | Voxels Ocupados (Masa) | % Ocupancia Interna |
+| Proteína (ID) | Dimensiones | Volumen Total (voxels) | Voxels Ocupados (Masa) | % Ocupancia Interna |
 | :--- | :---: | :---: | :---: | :---: |
 | **5mrc_10A** | (72, 72, 72) | 373,248 | 15,731 | 4.21% |
 | **4v94_10A** | (72, 72, 72) | 373,248 | 11,332 | 3.04% |

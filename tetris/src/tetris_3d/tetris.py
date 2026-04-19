@@ -73,6 +73,6 @@ class Tetris3D:
             
             self.place_molecule_3d((z, y, x), molecule_rotated, step)
             self.all_coordinates.append((z, y, x))
-            print(f"    -> Paso {step}: {mol_name} en {(z,y,x)} | Occ: {self.get_occupancy()*100:.4f}%")
+            print(f"    -> Protein {step}: {mol_name} inserted at {(z,y,x)} | Occ: {self.get_occupancy()*100:.4f}%")
             return 'inserted'
         return 'saturated'
