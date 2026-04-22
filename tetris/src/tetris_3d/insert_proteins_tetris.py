@@ -1,6 +1,6 @@
 import os, sys, time, numpy as np
 from pathlib import Path
-from tetris import Tetris3D
+from tetris import Tetris3D, xp, GPU_AVAILABLE as HAS_GPU
 from image_processing_3d import ImageProcessing3D
 from parser_3d import Parser3D
 import lio
@@ -17,21 +17,21 @@ MEMBRANE_FILES = [
 ]
 
 PROTEINS_LIST = [
-    # "in_10A/4v4r_10A.pns",
+    "in_10A/4v4r_10A.pns",
     # "in_10A/3j9i_10A.pns",
     "in_10A/5mrc_10A.pns",
     # "in_10A/4v7r_10A.pns",
     # "in_10A/2uv8_10A.pns",
-    # "in_10A/4v94_10A.pns",
-    # "in_10A/4cr2_10A.pns",
+    "in_10A/4v94_10A.pns",
+    "in_10A/4cr2_10A.pns",
     # "in_10A/3qm1_10A.pns",
     # "in_10A/3h84_10A.pns",
     # "in_10A/3gl1_10A.pns",
-    # "in_10A/3d2f_10A.pns",
+    "in_10A/3d2f_10A.pns",
     # "in_10A/3cf3_10A.pns",
     # "in_10A/2cg9_10A.pns",
     # "in_10A/1u6g_10A.pns",
-    # "in_10A/1s3x_10A.pns",
+    "in_10A/1s3x_10A.pns",
     # "in_10A/1qvr_10A.pns",
 ]
 
@@ -62,9 +62,9 @@ def pick_seed(allowed_mask, output_volume, threshold, box_size):
     half = box_size // 2
     z_dim, y_dim, x_dim = output_volume.shape
     empty = allowed_mask & (output_volume <= threshold)
-    viable = np.zeros_like(empty, dtype=bool)
+    viable = xp.zeros_like(empty, dtype=bool)
     viable[half:z_dim-half, half:y_dim-half, half:x_dim-half] = empty[half:z_dim-half, half:y_dim-half, half:x_dim-half]
-    candidates = np.argwhere(viable)
+    candidates = xp.argwhere(viable)
     if len(candidates) == 0: return None
     return tuple(int(x) for x in candidates[np.random.randint(0, len(candidates))])
 
@@ -73,9 +73,9 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
     print(f"\nProcessing Tomogram: {os.path.basename(membrane_mrc_path)}")
     start_time = time.time()
     membrane_volume = lio.load_mrc(str(membrane_mrc_path)).astype(np.float32)
-    allowed_mask = ~(membrane_volume > 0)   
+    allowed_mask = xp.asarray(~(membrane_volume > 0))
     total_voxels = allowed_mask.size
-    membrane_occ = np.count_nonzero(~allowed_mask) / total_voxels
+    membrane_occ = float(xp.count_nonzero(~allowed_mask) / total_voxels)
     print(f"\nMembrane occupancy before proteins: {membrane_occ*100:.4f}%")
     
     molecules = []
@@ -116,18 +116,19 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
                     print(f"[!] No space. New seed {current_target}")
 
         num_monomers = total_inserted - inserted_before
-        total_occ = tetris_obj.get_occupancy()
-        proteins_occ = max(total_occ - membrane_occ, 0.0)
+        total_occ = float(tetris_obj.get_occupancy())
+        proteins_occ = max(float(total_occ) - membrane_occ, 0.0)
         inserted_vox = int(round(proteins_occ * total_voxels))
         per_type_summary.append((type_idx, name, inserted_vox, num_monomers, proteins_occ, total_occ))
 
-    final = np.copy(tetris_obj.output_volume)
+    final = tetris_obj.output_volume.copy()
     final[~allowed_mask] = 0.0
     combined = final + ((~allowed_mask).astype(np.float32) * (MEMBRANE_INTENSITY_SCALE * final.max()))
+    combined_cpu = combined.get() if HAS_GPU else combined
     tomo_idx = Path(membrane_mrc_path).stem.split("_")[-1]
     num_types = len(proteins_list)
     output_mrc = Path(output_dir) / f"tomo{tomo_idx}_den{num_types}.mrc"
-    lio.write_mrc(combined, str(output_mrc), v_size=VOI_VSIZE)
+    lio.write_mrc(combined_cpu, str(output_mrc), v_size=VOI_VSIZE)
 
     print(f"\nMembrane occupancy before proteins: {membrane_occ*100:.4f}%")
     for type_idx, name, inserted_vox, num_monomers, proteins_occ, total_occ in per_type_summary:

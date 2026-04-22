@@ -5,7 +5,6 @@ Contiene las operaciones esenciales para el flujo de trabajo de Tetris 3D.
 """
 
 import numpy as np
-from scipy.ndimage import gaussian_filter, binary_dilation, binary_closing, affine_transform
 from scipy.spatial.transform import Rotation as R
 from skimage.morphology import ball
 from typing import Tuple
@@ -14,12 +13,24 @@ import scipy.fft
 
 try:
     import pyfftw
-    # Configurar para usar todos los núcleos disponibles (8 CPUs) 
     pyfftw.config.NUM_THREADS = multiprocessing.cpu_count()
     scipy.fft.set_global_backend(pyfftw.interfaces.scipy_fft)
     print(f"[OPT] PyFFTW activado usando {pyfftw.config.NUM_THREADS} hilos.")
 except ImportError:
     print("[WARN] PyFFTW no instalado. Correlación 3D usará 1 solo hilo.")
+
+# GPU detection 
+try:
+    import cupy as cp
+    import cupyx.scipy.ndimage as ndi_gpu
+    xp = cp
+    ndi = ndi_gpu
+    GPU_AVAILABLE = True
+except ImportError:
+    import scipy.ndimage as ndi_cpu
+    xp = np
+    ndi = ndi_cpu
+    GPU_AVAILABLE = False
 
 class ImageProcessing3D:
     """
@@ -27,52 +38,44 @@ class ImageProcessing3D:
     """
     
     @staticmethod
-    def randomly_rotate(data: np.ndarray, 
-                       angles: Tuple[float, float, float] = None) -> Tuple[np.ndarray, Tuple[float, float, float]]:
-        """
-        Rota un volumen 3D en una sola pasada usando una matriz de transformación afín.
-        Es mucho más eficiente que rotar eje por eje. 
-        """
+    def randomly_rotate(data: np.ndarray, angles: Tuple[float, float, float] = None):
         if angles is None:
             angles = np.random.uniform(0, 360, size=3)
         
-        # Crear matriz de rotación combinada (Z-Y-X)
         rotation = R.from_euler('zyx', angles, degrees=True)
         matrix = rotation.as_matrix()
-        
-        # Calcular centro para rotar sobre el propio eje del volumen
         center = np.array(data.shape) / 2.0
         offset = center - np.dot(matrix, center)
-        
-        # Aplicar transformación en una sola pasada
-        rotated = affine_transform(
-            data, 
-            matrix, 
-            offset=offset, 
-            order=1, 
-            mode='constant', 
-            cval=0.0
+
+        # Si hay GPU, convertimos los parámetros a CuPy para evitar el ValueError
+        device_data = xp.asarray(data)
+        device_matrix = xp.asarray(matrix)
+        device_offset = xp.asarray(offset)
+
+        # Usamos 'ndi' que apunta al backend detectado (SciPy o CuPy)
+        rotated = ndi.affine_transform(
+            device_data, device_matrix, offset=device_offset, 
+            order=1, mode='constant', cval=0.0
         )
         return rotated, tuple(angles)
     
     @staticmethod
-    def smooth_and_binarize(data: np.ndarray, sigma: float = 1.5, 
-                           threshold: float = 50) -> np.ndarray:
-        """
-        Limpia el volumen rotado aplicando un filtro Gaussiano y binarizando. 
-        """
+    def smooth_and_binarize(data, sigma: float = 1.5, threshold: float = 50):
         if sigma > 0:
-            data = gaussian_filter(data, sigma)
-        return (data > threshold).astype(np.float32)
+            data = ndi.gaussian_filter(xp.asarray(data), sigma)
+        return (data > threshold).astype(xp.float32)
 
     @staticmethod
-    def dilate(binary_volume: np.ndarray, distance: int) -> np.ndarray:
+    def dilate(binary_volume, distance: int):
         """
-        Dilatación 3D necesaria para generar las capas del template. 
+        Dilatación 3D necesaria para generar las capas del template.
+        Usa el backend activo para evitar mezclar NumPy con CuPy.
         """
+        device_binary = xp.asarray(binary_volume)
+        structure = xp.asarray(ball(max(1, distance)))
         if distance == 0:
-            return binary_closing(binary_volume, ball(1)).astype(np.float32)
-        return binary_dilation(binary_volume, ball(distance)).astype(np.float32)
+            return ndi.binary_closing(device_binary, structure=structure).astype(xp.float32)
+        return ndi.binary_dilation(device_binary, structure=structure).astype(xp.float32)
     
     @staticmethod
     def subtract(outer_layer: np.ndarray, inner_layer: np.ndarray, 
