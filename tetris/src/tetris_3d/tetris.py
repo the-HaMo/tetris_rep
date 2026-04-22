@@ -70,9 +70,10 @@ class Tetris3D:
             
             if np.any((self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] > self.threshold) & (molecule_rotated > self.threshold)):
                 temp_cmap[idx] = -1e9; continue
-            
-            self.place_molecule_3d((z, y, x), molecule_rotated, step)
-            self.all_coordinates.append((z, y, x))
-            print(f"    -> Protein {step}: {mol_name} inserted at {(z,y,x)} | Occ: {self.get_occupancy()*100:.4f}%")
+
+            coord = tuple(int(value) for value in (z, y, x))
+            self.place_molecule_3d(coord, molecule_rotated, step)
+            self.all_coordinates.append(coord)
+            print(f"    -> Protein {step}: {mol_name} inserted at {coord} | Occ: {self.get_occupancy()*100:.4f}%")
             return 'inserted'
         return 'saturated'

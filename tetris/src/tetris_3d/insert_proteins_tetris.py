@@ -66,9 +66,10 @@ def pick_seed(allowed_mask, output_volume, threshold, box_size):
     viable[half:z_dim-half, half:y_dim-half, half:x_dim-half] = empty[half:z_dim-half, half:y_dim-half, half:x_dim-half]
     candidates = np.argwhere(viable)
     if len(candidates) == 0: return None
-    return tuple(candidates[np.random.randint(0, len(candidates))])
+    return tuple(int(x) for x in candidates[np.random.randint(0, len(candidates))])
 
 def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, membrane_id):
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
     print(f"\nProcessing Tomogram: {os.path.basename(membrane_mrc_path)}")
     start_time = time.time()
     membrane_volume = lio.load_mrc(str(membrane_mrc_path)).astype(np.float32)
