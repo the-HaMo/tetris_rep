@@ -48,7 +48,7 @@ def _pick_seed(allowed_mask, output_volume, threshold, box_size):
     candidates = xp.argwhere(viable)
     if len(candidates) == 0:
         return None
-    return tuple(int(x) for x in candidates[xp.random.randint(0, len(candidates))])
+    return tuple(int(x) for x in candidates[np.random.randint(0, len(candidates))])
 
 
 def _plot_occupancy_timeline(timeline, totals, total_time, output_path):
@@ -137,6 +137,7 @@ def main():
     for p_path in sorted_proteinSizes(PROTEINS_LIST):
         protein_path = ROOT_PATH / p_path
         vol, _ = Parser3D.load_protein(str(protein_path), str(ROOT_PATH))
+        vol = xp.asarray(vol)
         coords = xp.argwhere(vol > vol.max() * PROTEIN_ISO_THRESHOLD_RATIO)
         if coords.size == 0:
             continue
