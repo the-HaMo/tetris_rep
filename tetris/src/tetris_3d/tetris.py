@@ -75,26 +75,69 @@ class Tetris3D:
         cmap = _correlate(local_bin, molecule_template)
         cmap = xp.where(allowed_mask[z_s:z_e, y_s:y_e, x_s:x_e], cmap, -1e9) 
  
-        temp_cmap = cmap.copy()
-        for _ in range(50):
-            if temp_cmap.max() <= -1e8: return 'saturated'
-            idx = xp.unravel_index(temp_cmap.argmax(), temp_cmap.shape)
-            z, y, x = idx[0] + z_s, idx[1] + y_s, idx[2] + x_s
-            h = xp.array(molecule_rotated.shape) // 2
-            dz_s, dz_e = z-h[0], z-h[0]+molecule_rotated.shape[0]
-            dy_s, dy_e = y-h[1], y-h[1]+molecule_rotated.shape[1]
-            dx_s, dx_e = x-h[2], x-h[2]+molecule_rotated.shape[2]
- 
-            # GARANTÍA: Si se sale del cuadro, descarta. No corta proteínas.
-            if (dz_s < 0 or dz_e > self.dimensions[0] or dy_s < 0 or dy_e > self.dimensions[1] or dx_s < 0 or dx_e > self.dimensions[2]):
-                temp_cmap[idx] = -1e9; continue
-            
-            if xp.any((self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] > self.threshold) & (molecule_rotated > self.threshold)):
-                temp_cmap[idx] = -1e9; continue
- 
-            coord = tuple(int(value) for value in (z, y, x))
+        if GPU_AVAILABLE:
+            # GPU: 2 FFTs + 1 sync — sin bucle Python
+            h0, h1, h2 = (s // 2 for s in molecule_rotated.shape)
+            ms0, ms1, ms2 = molecule_rotated.shape
+            sh0, sh1, sh2 = cmap.shape
+            z_idx = xp.arange(sh0, dtype=xp.int32) + z_s
+            y_idx = xp.arange(sh1, dtype=xp.int32) + y_s
+            x_idx = xp.arange(sh2, dtype=xp.int32) + x_s
+            boundary_ok = (
+                ((z_idx[:, None, None] - h0) >= 0) &
+                ((z_idx[:, None, None] - h0 + ms0) <= self.dimensions[0]) &
+                ((y_idx[None, :, None] - h1) >= 0) &
+                ((y_idx[None, :, None] - h1 + ms1) <= self.dimensions[1]) &
+                ((x_idx[None, None, :] - h2) >= 0) &
+                ((x_idx[None, None, :] - h2 + ms2) <= self.dimensions[2])
+            )
+            mol_bin     = (molecule_rotated > self.threshold).astype(xp.float32)
+            overlap_map = _correlate(local_bin, mol_bin)
+            valid_cmap  = xp.where(
+                boundary_ok & (overlap_map < 0.5),
+                cmap,
+                xp.full_like(cmap, -1e9)
+            )
+            flat = valid_cmap.ravel()
+            pair = xp.concatenate([
+                flat.max().reshape(1).astype(xp.float64),
+                flat.argmax().astype(xp.float64).reshape(1)
+            ])
+            result   = pair.get()           # único sync host-device
+            max_val  = float(result[0])
+            flat_idx = int(result[1])
+            if max_val <= -1e8:
+                return 'saturated'
+            iz = flat_idx // (sh1 * sh2)
+            iy = (flat_idx % (sh1 * sh2)) // sh2
+            ix = flat_idx % sh2
+            coord = (iz + z_s, iy + y_s, ix + x_s)
             self.place_molecule_3d(coord, molecule_rotated, step)
             self.all_coordinates.append(coord)
             print(f"    -> Protein {step}: {mol_name} inserted at {coord} | Occ: {self.get_occupancy()*100:.4f}%")
             return 'inserted'
-        return 'saturated'
+
+        else:
+            # CPU: 1 FFT (ya calculada) + check directo por candidato
+            temp_cmap = cmap.copy()
+            for _ in range(50):
+                if temp_cmap.max() <= -1e8: return 'saturated'
+                idx = xp.unravel_index(temp_cmap.argmax(), temp_cmap.shape)
+                z, y, x = idx[0] + z_s, idx[1] + y_s, idx[2] + x_s
+                h = xp.array(molecule_rotated.shape) // 2
+                dz_s, dz_e = z-h[0], z-h[0]+molecule_rotated.shape[0]
+                dy_s, dy_e = y-h[1], y-h[1]+molecule_rotated.shape[1]
+                dx_s, dx_e = x-h[2], x-h[2]+molecule_rotated.shape[2]
+
+                # GARANTÍA: Si se sale del cuadro, descarta. No corta proteínas.
+                if (dz_s < 0 or dz_e > self.dimensions[0] or dy_s < 0 or dy_e > self.dimensions[1] or dx_s < 0 or dx_e > self.dimensions[2]):
+                    temp_cmap[idx] = -1e9; continue
+
+                if xp.any((self.output_volume[dz_s:dz_e, dy_s:dy_e, dx_s:dx_e] > self.threshold) & (molecule_rotated > self.threshold)):
+                    temp_cmap[idx] = -1e9; continue
+
+                coord = tuple(int(value) for value in (z, y, x))
+                self.place_molecule_3d(coord, molecule_rotated, step)
+                self.all_coordinates.append(coord)
+                print(f"    -> Protein {step}: {mol_name} inserted at {coord} | Occ: {self.get_occupancy()*100:.4f}%")
+                return 'inserted'

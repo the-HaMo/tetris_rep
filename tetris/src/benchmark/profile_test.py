@@ -25,6 +25,7 @@ from insert_proteins_tetris import (
     VOI_SHAPE,
     ROOT_PATH,
     sorted_proteinSizes,
+    pick_seed,
 )
 from parser_3d import Parser3D
 import tetris as tetris_mod
@@ -37,18 +38,6 @@ def _sync_if_gpu():
         import cupy as cp
 
         cp.cuda.Stream.null.synchronize()
-
-
-def _pick_seed(allowed_mask, output_volume, threshold, box_size):
-    half = box_size // 2
-    z_dim, y_dim, x_dim = output_volume.shape
-    empty = allowed_mask & (output_volume <= threshold)
-    viable = xp.zeros_like(empty, dtype=bool)
-    viable[half:z_dim-half, half:y_dim-half, half:x_dim-half] = empty[half:z_dim-half, half:y_dim-half, half:x_dim-half]
-    candidates = xp.argwhere(viable)
-    if len(candidates) == 0:
-        return None
-    return tuple(int(x) for x in candidates[np.random.randint(0, len(candidates))])
 
 
 def _plot_occupancy_timeline(timeline, totals, total_time, output_path):
@@ -175,13 +164,19 @@ def main():
 
     tetris_mod._correlate = _timed_correlate
 
+    class _Null:
+        def write(self, _): pass
+        def flush(self): pass
+
+    _real_out = sys.stdout
+
     try:
         for _type_idx, (_name, volume) in enumerate(molecules, start=1):
-            box_size = max(volume.shape)
+            box_size   = max(volume.shape)
+            n_before   = len(tetris_obj.all_coordinates)
+
             t0 = time.perf_counter()
-            current_target = _pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
-            if current_target is not None:
-                print(f"[SEED] initial {current_target}")
+            current_target = pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
             totals["seed_pick"] += time.perf_counter() - t0
 
             consecutive_failures = 0
@@ -201,7 +196,9 @@ def main():
                 totals["template"] += time.perf_counter() - t0
 
                 t0 = time.perf_counter()
+                sys.stdout = _Null()
                 res = tetris_obj.insert_molecule_3d(template, rotated, _name, allowed_mask, current_target, box_size)
+                sys.stdout = _real_out
                 _sync_if_gpu()
                 totals["insert_molecule_total"] += time.perf_counter() - t0
 
@@ -216,11 +213,16 @@ def main():
                 else:
                     consecutive_failures += 1
                     t0 = time.perf_counter()
-                    current_target = _pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
-                    if current_target is not None:
-                        print(f"[SEED] retry {current_target}")
+                    current_target = pick_seed(allowed_mask, tetris_obj.output_volume, global_threshold, box_size)
                     totals["seed_pick"] += time.perf_counter() - t0
+
+            n_ins = len(tetris_obj.all_coordinates) - n_before
+            occ   = float(tetris_obj.get_occupancy() * 100.0)
+            key   = str(_name).split("/")[-1].split("_")[0]
+            label = "GPU" if GPU_AVAILABLE else "CPU"
+            print(f"  [Tetris {label}] {key}  ins={n_ins}  occ={occ:.2f}%")
     finally:
+        sys.stdout = _real_out
         tetris_mod._correlate = original_correlate
 
     total_time = time.perf_counter() - start_time

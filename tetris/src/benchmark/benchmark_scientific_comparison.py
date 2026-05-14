@@ -36,13 +36,12 @@ PROTEIN_FILE = [
     "in_10A/3d2f_10A.pns",
     "in_10A/1s3x_10A.pns"
 ]
-TARGETS_PERCENT   = [2.5, 5.0] #, 5.0, 7.5, 10.0, 12.5, 15.0, 20.0, 22.5, 25.0, 27.5, 30.0, 32.5, 35.0, 37.5, 40.0, 42.5, 45.0, 47.5, 50.0, 52.5, 55.0]
-REPEATS_PER_TARGET = 1
+TARGETS_PERCENT   = [2.5, 5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0, 27.5, 30.0, 32.5, 35.0, 37.5, 40.0, 42.5, 45.0, 47.5, 50.0, 52.5, 55.0]
+REPEATS_PER_TARGET = 2
 BENCHMARK_VOI_SHAPE = (500, 500, 250)   # reducir si hay OOM; usar (300,300,250) en GPU
 
 FORCE_SAWLC_SHORT_CHAIN = False
 SHORT_CHAIN_PMER_L_MAX  = 1
-#
 
 @dataclass
 class RunMetrics:
@@ -87,72 +86,83 @@ def _get_pns(path: Path, key: str) -> Optional[str]:
 
 def _tetris_sci_worker(proteins: list, voi_shape: tuple, target_occ: float, q) -> None:
     """Corre Tetris hasta target_occ y devuelve métricas."""
-    import sys as _sys, os as _os, time as _t
+    import sys as _sys, os as _os, io as _io, time as _t
     from pathlib import Path as _P
     _sys.path.insert(0, str(_P(__file__).resolve().parents[1] / "tetris_3d"))
 
-    from tetris import Tetris3D, xp
-    from image_processing_3d import ImageProcessing3D
-    from parser_3d import Parser3D
-    from insert_proteins_tetris import (
-        pick_seed, sorted_proteinSizes, crop_volume,
-        ROOT_PATH, PROTEIN_ISO_THRESHOLD_RATIO, TRIES_CLUSTERING,
-    )
+    try:
+        from tetris import Tetris3D, xp
+        from image_processing_3d import ImageProcessing3D
+        from parser_3d import Parser3D
+        from insert_proteins_tetris import (
+            pick_seed, sorted_proteinSizes, crop_volume,
+            ROOT_PATH, PROTEIN_ISO_THRESHOLD_RATIO, TRIES_CLUSTERING,
+        )
 
-    start   = _t.time()
-    allowed = xp.ones(voi_shape, dtype=bool)
+        start   = _t.time()
+        allowed = xp.ones(voi_shape, dtype=bool)
 
-    mols = []
-    for p in sorted_proteinSizes(proteins):
-        vol, _ = Parser3D.load_protein(str(ROOT_PATH / p), str(ROOT_PATH))
-        vol_c  = crop_volume(vol, vol.max() * PROTEIN_ISO_THRESHOLD_RATIO)
-        mols.append((_os.path.basename(p), vol_c))
+        mols = []
+        for p in sorted_proteinSizes(proteins):
+            vol, _ = Parser3D.load_protein(str(ROOT_PATH / p), str(ROOT_PATH))
+            vol_c  = crop_volume(vol, vol.max() * PROTEIN_ISO_THRESHOLD_RATIO)
+            mols.append((_os.path.basename(p), xp.asarray(vol_c)))
 
-    if not mols:
-        q.put({"occ": 0.0, "inserted": 0, "runtime": _t.time()-start,
-               "stop": "no-molecules", "pmer_fails": None})
-        return
+        if not mols:
+            q.put({"occ": 0.0, "inserted": 0, "runtime": _t.time()-start,
+                   "stop": "no-molecules", "pmer_fails": None})
+            return
 
-    g_thresh    = mols[0][1].max() * PROTEIN_ISO_THRESHOLD_RATIO
-    tetris      = Tetris3D(dimensions=voi_shape, threshold=g_thresh)
-    total       = 0
-    target_hit  = False
-    seed_fails  = 0
+        g_thresh    = mols[0][1].max() * PROTEIN_ISO_THRESHOLD_RATIO
+        tetris      = Tetris3D(dimensions=voi_shape, threshold=g_thresh)
+        total       = 0
+        target_hit  = False
+        seed_fails  = 0
 
-    for _, (name, vol) in enumerate(mols, 1):
-        if float(tetris.get_occupancy()) * 100.0 >= target_occ:
-            target_hit = True; break
-        bsize  = max(vol.shape)
-        seed   = pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
-        if seed is None:
-            seed_fails += 1
-            continue
-        fails  = 0
-        while fails < TRIES_CLUSTERING:
+        for _, (name, vol) in enumerate(mols, 1):
             if float(tetris.get_occupancy()) * 100.0 >= target_occ:
                 target_hit = True; break
-            rot, _  = ImageProcessing3D.randomly_rotate(vol)
-            rbin    = ImageProcessing3D.smooth_and_binarize(rot, 1.5, g_thresh)
-            tmpl, _, _ = ImageProcessing3D.create_in_shell(rbin, (0, 2), penalty=100)
-            res = tetris.insert_molecule_3d(tmpl, rot, name, allowed, seed, bsize)
-            if res == "inserted":
-                total += 1; fails = 0
-                seed = tetris.all_coordinates[-1]
-            else:
-                fails += 1
-                seed = pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
-                if seed is None:
-                    seed_fails += 1
-                    break
-        else:
-            seed_fails += 1  # agotó TRIES_CLUSTERING sin insertar
-        if target_hit: break
+            bsize  = max(vol.shape)
+            seed   = pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
+            if seed is None:
+                seed_fails += 1
+                continue
+            fails  = 0
+            buf = _io.StringIO()
+            old = _sys.stdout; _sys.stdout = buf
+            try:
+                while fails < TRIES_CLUSTERING:
+                    if float(tetris.get_occupancy()) * 100.0 >= target_occ:
+                        target_hit = True; break
+                    rot, _  = ImageProcessing3D.randomly_rotate(vol)
+                    rbin    = ImageProcessing3D.smooth_and_binarize(rot, 1.5, g_thresh)
+                    tmpl, _, _ = ImageProcessing3D.create_in_shell(rbin, (0, 2), penalty=100)
+                    res = tetris.insert_molecule_3d(tmpl, rot, name, allowed, seed, bsize)
+                    if res == "inserted":
+                        total += 1; fails = 0
+                        seed = tetris.all_coordinates[-1]
+                    else:
+                        fails += 1
+                        seed = pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
+                        if seed is None:
+                            seed_fails += 1
+                            break
+                else:
+                    seed_fails += 1  # agotó TRIES_CLUSTERING sin insertar
+            finally:
+                _sys.stdout = old
+            occ_now = float(tetris.get_occupancy()) * 100.0
+            print(f"  [Tetris] {name}  ins={total}  occ={occ_now:.2f}%", flush=True)
+            if target_hit: break
 
-    q.put({"occ":      float(tetris.get_occupancy()) * 100.0,
-           "inserted": total,
-           "runtime":  _t.time() - start,
-           "stop":     "target-reached" if target_hit else "saturation",
-           "pmer_fails": seed_fails})
+        q.put({"occ":      float(tetris.get_occupancy()) * 100.0,
+               "inserted": total,
+               "runtime":  _t.time() - start,
+               "stop":     "target-reached" if target_hit else "saturation",
+               "pmer_fails": seed_fails})
+    except Exception:
+        import traceback as _tb
+        q.put({"error": _tb.format_exc()})
 
 
 def _sawlc_sci_worker(proteins: list, voi_shape: tuple, target_occ: float, q) -> None:
@@ -185,7 +195,7 @@ def _sawlc_sci_worker(proteins: list, voi_shape: tuple, target_occ: float, q) ->
                 surf_dec=0.9,
                 mmer_tries=20,
                 pmer_tries=100,
-                verbosity=False,
+                verbosity=True,
             )
     finally:
         _sys.stdout = old
@@ -214,7 +224,12 @@ def _spawn(target, args) -> dict:
     q   = ctx.Queue()
     p   = ctx.Process(target=target, args=(*args, q))
     p.start(); p.join()
-    return q.get()
+    if q.empty():
+        raise RuntimeError(f"Worker terminó sin resultados (exit code {p.exitcode})")
+    result = q.get()
+    if "error" in result:
+        raise RuntimeError(f"Worker falló:\n{result['error']}")
+    return result
 
 
 def _run_algo(algo: str, proteins: list, target_pct: float, rep: int) -> RunMetrics:
@@ -315,38 +330,32 @@ def _generate_plots(rows: list) -> None:
     tet_occ_x = [0.0] + tet_occ;  tet_std_x = [0.0] + tet_occ_std
     ax.errorbar(t_ext, saw_occ_x, yerr=saw_std_x, fmt="o-", lw=2, capsize=4, label="SAWLC")
     ax.errorbar(t_ext, tet_occ_x, yerr=tet_std_x, fmt="s-", lw=2, capsize=4, label="Tetris")
-    ax.axline((0, 0), slope=1, color="k", ls="--", lw=1.5, alpha=0.8, zorder=10, label="Objetivo (y=x)")
-    ax.set_title("Densidad alcanzada (packing fraction)")
-    ax.set_xlabel("Ocupancia objetivo (%)"); ax.set_ylabel("Ocupancia final binaria (%)")
+    ax.axline((0, 0), slope=1, color="k", ls="--", lw=1.5, alpha=0.8, zorder=10)
+    ax.set_title("Packing Fraction Achieved")
+    ax.set_xlabel("Target Occupancy (%)"); ax.set_ylabel("Final Binary Occupancy (%)")
     ax.legend()
 
     ax = axes[0, 1]
     ax.errorbar(targets, saw_time, yerr=saw_time_std, fmt="o-", lw=2, capsize=4, label="SAWLC")
     ax.errorbar(targets, tet_time, yerr=tet_time_std, fmt="s-", lw=2, capsize=4, label="Tetris")
-    ax.set_title("Tiempo total por target")
-    ax.set_xlabel("Ocupancia objetivo (%)"); ax.set_ylabel("Tiempo (s)")
+    ax.set_title("Total Time per Target")
+    ax.set_xlabel("Target Occupancy (%)"); ax.set_ylabel("Time (s)")
     ax.legend()
 
     ax = axes[1, 0]
     ax.errorbar(targets, saw_tpi, yerr=saw_tpi_std, fmt="o-", lw=2, capsize=4, label="SAWLC")
     ax.errorbar(targets, tet_tpi, yerr=tet_tpi_std, fmt="s-", lw=2, capsize=4, label="Tetris")
-    ax.set_title("Tiempo por inserción exitosa")
-    ax.set_xlabel("Ocupancia objetivo (%)"); ax.set_ylabel("s / proteína")
+    ax.set_title("Time per Successful Insertion")
+    ax.set_xlabel("Target Occupancy (%)"); ax.set_ylabel("s / protein")
     ax.legend()
 
     ax = axes[1, 1]
-    tet_fail     = [_mean([float(r.pmer_fails) if r.pmer_fails is not None else float("nan")
-                           for r in by("tetris", t)]) for t in targets]
-    tet_fail_std = [_std( [float(r.pmer_fails) if r.pmer_fails is not None else float("nan")
-                           for r in by("tetris", t)]) for t in targets]
     x = np.arange(len(targets), dtype=float)
-    w = 0.3
-    ax.bar(x - w/2, saw_fail, w, yerr=saw_fail_std, capsize=4, label="SAWLC pmer_fails")
-    ax.bar(x + w/2, tet_fail, w, yerr=tet_fail_std, capsize=4, label="Tetris seed_fails")
+    w = 0.4
+    ax.bar(x, saw_fail, w, yerr=saw_fail_std, capsize=4, label="SAWLC pmer_fails")
     ax.set_xticks(x); ax.set_xticklabels([str(int(t)) for t in targets])
-    ax.set_title("Fallos de inserción acumulados")
-    ax.set_xlabel("Ocupancia objetivo (%)"); ax.set_ylabel("Fallos (promedio)")
-    ax.legend(fontsize=9)
+    ax.set_title("SAWLC: Accumulated Failures")
+    ax.set_xlabel("Target Occupancy (%)"); ax.set_ylabel("Failures (mean)")
 
     plt.tight_layout()
     out = OUT_REPORT / "benchmark_scientific_plots.png"

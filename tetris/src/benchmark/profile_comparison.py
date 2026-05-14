@@ -40,21 +40,9 @@ def _tetris_profile_worker(force_cpu: bool, q) -> None:
     from insert_proteins_tetris import (
         MEMBRANES_PATH, MEMBRANE_FILES, PROTEINS_LIST,
         VOI_SHAPE, ROOT_PATH, PROTEIN_ISO_THRESHOLD_RATIO, TRIES_CLUSTERING,
-        sorted_proteinSizes,
+        sorted_proteinSizes, pick_seed, crop_volume,
     )
     import lio
-
-    def _pick_seed(allowed_mask, output_volume, threshold, box_size):
-        half = box_size // 2
-        z, y, x = output_volume.shape
-        empty  = allowed_mask & (output_volume <= threshold)
-        viable = xp.zeros_like(empty, dtype=bool)
-        viable[half:z-half, half:y-half, half:x-half] = \
-            empty[half:z-half, half:y-half, half:x-half]
-        cands = xp.argwhere(viable)
-        if len(cands) == 0:
-            return None
-        return tuple(int(v) for v in cands[_np.random.randint(0, len(cands))])
 
     # Cargar volumen
     if MEMBRANE_FILES:
@@ -63,17 +51,12 @@ def _tetris_profile_worker(force_cpu: bool, q) -> None:
         mem_vol = _np.zeros(VOI_SHAPE, dtype="float32")
     allowed = xp.asarray(~(mem_vol > 0))
 
-    # Cargar proteínas
+    # Cargar proteínas: crop en NumPy, luego subir a GPU
     molecules = []
     for p_path in sorted_proteinSizes(PROTEINS_LIST):
-        vol, _ = Parser3D.load_protein(str(ROOT_PATH / p_path), str(ROOT_PATH))
-        vol = xp.asarray(vol)
-        coords = xp.argwhere(vol > vol.max() * PROTEIN_ISO_THRESHOLD_RATIO)
-        if coords.size == 0:
-            continue
-        z0, y0, x0 = coords.min(axis=0)
-        z1, y1, x1 = coords.max(axis=0) + 1
-        molecules.append((p_path, vol[int(z0):int(z1), int(y0):int(y1), int(x0):int(x1)]))
+        vol_np, _ = Parser3D.load_protein(str(ROOT_PATH / p_path), str(ROOT_PATH))
+        vol_c = crop_volume(vol_np, vol_np.max() * PROTEIN_ISO_THRESHOLD_RATIO)
+        molecules.append((p_path, xp.asarray(vol_c)))
 
     if not molecules:
         q.put(([], 0.0))
@@ -86,25 +69,44 @@ def _tetris_profile_worker(force_cpu: bool, q) -> None:
     timeline: Timeline = []
     t0_global = _t.perf_counter()
 
-    for _, (_, vol) in enumerate(molecules, 1):
-        bsize = max(vol.shape)
-        seed  = _pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
-        fails = 0
-        while fails < TRIES_CLUSTERING:
-            if seed is None:
-                break
-            rot, _  = ImageProcessing3D.randomly_rotate(vol)
-            rbin    = ImageProcessing3D.smooth_and_binarize(rot, 1.5, g_thresh)
-            tmpl, _, _ = ImageProcessing3D.create_in_shell(rbin, (0, 2), penalty=100)
-            res = tetris.insert_molecule_3d(tmpl, rot, "", allowed, seed, bsize)
-            if res == "inserted":
-                occ = float(tetris.get_occupancy() * 100.0)
-                timeline.append((_t.perf_counter() - t0_global, occ))
-                fails = 0
-                seed  = tetris.all_coordinates[-1]
-            else:
-                fails += 1
-                seed  = _pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
+    class _Null:
+        def write(self, _): pass
+        def flush(self): pass
+
+    _real_out = _sys.stdout
+    _sys.stdout = _Null()
+    try:
+        for _, (pname, vol) in enumerate(molecules, 1):
+            bsize    = max(vol.shape)
+            seed     = pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
+            fails    = 0
+            n_before = len(tetris.all_coordinates)
+
+            while fails < TRIES_CLUSTERING:
+                if seed is None:
+                    break
+                rot, _  = ImageProcessing3D.randomly_rotate(vol)
+                rbin    = ImageProcessing3D.smooth_and_binarize(rot, 1.5, g_thresh)
+                tmpl, _, _ = ImageProcessing3D.create_in_shell(rbin, (0, 2), penalty=100)
+                res = tetris.insert_molecule_3d(tmpl, rot, pname, allowed, seed, bsize)
+                if res == "inserted":
+                    occ = float(tetris.get_occupancy() * 100.0)
+                    timeline.append((_t.perf_counter() - t0_global, occ))
+                    fails = 0
+                    seed  = tetris.all_coordinates[-1]
+                else:
+                    fails += 1
+                    seed  = pick_seed(allowed, tetris.output_volume, g_thresh, bsize)
+
+            n_ins = len(tetris.all_coordinates) - n_before
+            occ   = float(tetris.get_occupancy() * 100.0)
+            key   = pname.split("/")[-1].split("_")[0]
+            _sys.stdout = _real_out
+            label = "CPU" if force_cpu else "GPU"
+            print(f"  [Tetris {label}] {key}  ins={n_ins}  occ={occ:.2f}%")
+            _sys.stdout = _Null()
+    finally:
+        _sys.stdout = _real_out
 
     total_time = _t.perf_counter() - t0_global
     q.put((timeline, total_time))
