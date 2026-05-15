@@ -1,4 +1,12 @@
-import os, sys, time, numpy as np
+USE_GPU = True  # False para forzar CPU
+
+import os, sys
+if not USE_GPU:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    sys.modules["cupy"] = None
+    sys.modules["cupyx"] = None
+
+import time, numpy as np
 from pathlib import Path
 from tetris import Tetris3D, xp, GPU_AVAILABLE as HAS_GPU
 from image_processing_3d import ImageProcessing3D
@@ -13,26 +21,26 @@ MEMBRANE_FILES = [
     # "tomo_mem_lbls_0.mrc",
     # "tomo_mem_lbls_1.mrc",
     # "tomo_mem_lbls_2.mrc",
-    # "tomo_mem_lbls_3.mrc",
+     "tomo_mem_lbls_3.mrc",
 ]
 
 PROTEINS_LIST = [
-    "in_10A/4v4r_10A.pns",
+    # "in_10A/4v4r_10A.pns",
     # "in_10A/3j9i_10A.pns",
-    "in_10A/5mrc_10A.pns",
+    # "in_10A/5mrc_10A.pns",
     # "in_10A/4v7r_10A.pns",
-    "in_10A/2uv8_10A.pns",
-    "in_10A/4v94_10A.pns",
-    "in_10A/4cr2_10A.pns",
+     "in_10A/2uv8_10A.pns",
+    # "in_10A/4v94_10A.pns",
+    # "in_10A/4cr2_10A.pns",
     # "in_10A/3qm1_10A.pns",
     # "in_10A/3h84_10A.pns",
     # "in_10A/3gl1_10A.pns",
-    "in_10A/3d2f_10A.pns",
-    "in_10A/3cf3_10A.pns",
-    "in_10A/2cg9_10A.pns",
-    "in_10A/1u6g_10A.pns",
-    "in_10A/1s3x_10A.pns",
-    "in_10A/1qvr_10A.pns",
+    # "in_10A/3d2f_10A.pns",
+    # "in_10A/3cf3_10A.pns",
+    # "in_10A/2cg9_10A.pns",
+    # "in_10A/1u6g_10A.pns",
+    # "in_10A/1s3x_10A.pns",
+    # "in_10A/1qvr_10A.pns",
 ]
 
 
