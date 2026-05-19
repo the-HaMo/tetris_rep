@@ -1,0 +1,8 @@
+Membrane occupancy before proteins: 11.5450%
+After type 01 (5mrc_10A.pns): inserted_vox=9376195, num_monomers=1230, proteins_occ=15.0019%, total_occ=26.5469%
+After type 02 (4v94_10A.pns): inserted_vox=12268586, num_monomers=660, proteins_occ=19.6297%, total_occ=31.1748%
+After type 03 (4v4r_10A.pns): inserted_vox=12268586, num_monomers=0, proteins_occ=19.6297%, total_occ=31.1748%
+After type 04 (4cr2_10A.pns): inserted_vox=13659531, num_monomers=409, proteins_occ=21.8552%, total_occ=33.4003%
+After type 05 (3d2f_10A.pns): inserted_vox=21028191, num_monomers=13217, proteins_occ=33.6451%, total_occ=45.1901%
+total_occ = 45.1901%
+DONE: 15516 inserted in 93m 11.60s

@@ -13,7 +13,7 @@
 La Criomicroscopía Electrónica de Tomografía (Cryo-ET) se ha consolidado como la técnica diagnóstica por excelencia para la observación de macromoléculas biológicas en su estado nativo. A diferencia de la cristalografía de rayos X, esta técnica permite visualizar el interior celular sin necesidad de cristalización o purificación previa de las muestras.
 
 \subsection{Fundamentos y adquisición de datos}
-El origen de la microscopía electrónica de transmisión (TEM) se remonta a 1931, con el desarrollo del primer prototipo por Max Knoll y Ernst Ruska, hito que le valdría a este último el Premio Nobel de Física en 1986. Sin embargo, la aplicación de esta técnica a muestras biológicas enfrentó inicialmente un obstáculo crítico: el daño por radiación. El haz de electrones de alta energía necesario para la obtención de imágenes provoca procesos de excitación molecular e ionización que destruyen las delicadas estructuras orgánicas\footnote{Esto se debe al bajo número atómico de los elementos que componen la materia orgánica (principalmente hidrógeno, carbono y oxígeno, etc), los cuales presentan una alta sensibilidad a la radiólisis y un bajo contraste intrínseco bajo el haz de electrones.}. No fue hasta la década de 1980 cuando el desarrollo de métodos de vitrificación por Jacques Dubochet permitió preservar las muestras en condiciones nativas.\\
+El origen de la microscopía electrónica de transmisión (TEM) se remonta a 1931, con el desarrollo del primer prototipo por Max Knoll y Ernst Ruska, hito que le valdría a este último el Premio Nobel de Física en 1986. Sin embargo, la aplicación de esta técnica a muestras biológicas enfrentó inicialmente un obstáculo crítico: el daño por radiación. El haz de electrones de alta energía necesario para la obtención de imágenes provoca procesos de excitación molecular e ionización que destruyen las delicadas estructuras orgánicas\footnote{Esto se debe al bajo número atómico de los elementos que componen la materia orgánica (principalmente hidrógeno, carbono y oxígeno, etc.), los cuales presentan una alta sensibilidad a la radiólisis y un bajo contraste intrínseco bajo el haz de electrones.}. No fue hasta la década de 1980 cuando el desarrollo de métodos de vitrificación por Jacques Dubochet permitió preservar las muestras en condiciones nativas, contribución que le valió el Premio Nobel de Química en 2017, compartido con Joachim Frank y Richard Henderson por sus avances en la criomicroscopía electrónica.\\
 
 La vitrificación es la piedra angular de la criomicroscopía moderna. Este proceso consiste en la congelación ultrarrápida de la muestra biológica, generalmente mediante su inmersión en etano líquido a temperaturas criogénicas. La velocidad del enfriamiento impide que las moléculas de agua se organicen en una estructura cristalina hexagonal, la cual expandiría su volumen y rompería las membranas celulares y complejos proteicos. En su lugar, el agua alcanza un estado sólido amorfo o vítreo, actuando como un soporte transparente a los electrones que inmoviliza y protege la estructura tridimensional de las macromoléculas.\\
 
@@ -28,7 +28,7 @@ La adquisición de datos en cryo-ET se basa en la generación de una \textbf{ser
     \label{fig:tilt-series}
 \end{figure}
 
-Finalmente, las proyecciones alineadas se procesan computacionalmente mediante algoritmos de reconstrucción matemática, siendo la Retroproyección Ponderada (\textit{Weighted Back-projection}, WBP) y los métodos iterativos como SIRT los más utilizados. El resultado es un \textbf{tomograma}: un volumen tridimensional compuesto por una rejilla de vóxeles que codifican la densidad electrónica local. Estos volúmenes se almacenan habitualmente en formato MRC, el cual permite gestionar grandes matrices de datos (por ejemplo, de $500\times500\times250$ vóxeles) y metadatos críticos como el tamaño de vóxel en 10\AA, parámetros fundamentales para la posterior inserción precisa de proteínas.
+Finalmente, las proyecciones alineadas se procesan computacionalmente mediante algoritmos de reconstrucción matemática, siendo la Retroproyección Ponderada (\textit{Weighted Back-projection}, WBP) y los métodos iterativos como SIRT los más utilizados. El resultado es un \textbf{tomograma}: un volumen tridimensional compuesto por una rejilla de vóxeles que codifican la densidad electrónica local. Estos volúmenes se almacenan habitualmente en formato MRC, el cual permite gestionar grandes matrices de datos (por ejemplo, de $500\times500\times250$ vóxeles) y metadatos críticos como el tamaño de vóxel (típicamente 10\,\AA), parámetros fundamentales para la posterior inserción precisa de proteínas.
 
 
 \subsection{Limitaciones: Ruido y el problema del Missing Wedge}
@@ -41,7 +41,7 @@ El segundo gran desafío técnico es el fenómeno denominado \textbf{Missing Wed
     \centering
     \includegraphics[width=0.7\textwidth]{archivos/missingWedge.png}
     \caption{Esquema de adquisición y espacio de Fourier con la cuña faltante (MW) y cuñas secundarias (BMW) que limitan la resolución vertical del tomograma.}
-    \label{fig:missing-wedge}
+    \label{fig:missingWedge}
 \end{figure}
 
 Estos factores —el ruido masivo y las distorsiones del Missing Wedge— introducen artefactos y borrosidad direccional que comprometen la fidelidad de la información biológica capturada. Esta degradación intrínseca de los datos reales hace imprescindible el uso de simuladores avanzados para generar entornos sintéticos con un etiquetado conocido. Al disponer de volúmenes donde la posición, geometría y orientación de cada elemento están definidas con precisión absoluta, es posible entrenar redes neuronales profundas (CNNs) que aprendan a reconocer patrones complejos, compensar las anisotropías geométricas y extraer señales coherentes en tomogramas reales altamente degradados.
@@ -89,7 +89,7 @@ El framework genera los siguientes archivos para cada tomograma:
 
 Estos outputs permiten entrenar modelos de segmentación automática y analizar la distribución de estructuras biológicas en el tomograma.
 
-\subsection{Inserción de proteínas solubles a través Self-Avoiding Worm-Like Chain (SAWLC)}
+\subsection{Inserción de proteínas solubles a través del Self-Avoiding Worm-Like Chain (SAWLC)}
 
 La inserción de proteínas solubles en PolNet se fundamenta en el modelo estocástico \textit{Self-Avoiding Worm-Like Chain} (SAWLC). Este algoritmo permite simular macromoléculas citosólicas como {cadenas poliméricas}\footnote{una cadena polimérica se entiende como un conjunto de monómeros conectados espacialmente.} discretas que mantienen una continuidad geométrica y evitan colisiones físicas mediante restricciones espaciales. A nivel computacional, el modelo SAWLC no realiza una simulación dinámica molecular, sino que actúa como un generador de configuraciones estocásticas basadas en el muestreo de posiciones y orientaciones plausibles.
 
@@ -116,7 +116,7 @@ Para asegurar una distribución estocástica de las orientaciones, cada monómer
 C(M_i, \text{VOI} \cup {M_1, \dots, M_{i-1}}) \leq \epsilon
 \end{equation}
 
-La ventaja principal de SAWLC es que impone continuidad geométrica y auto-evitación durante el crecimiento de cada cadena, lo que mejora el realismo estructural de los datos sintéticos sin perder control experimental.Además, el modelo soporta clústeres heterogéneos compuestos por $J$ tipos distintos de macromoléculas, permitiendo simular entornos citosólicos complejos. En términos prácticos, permite regular la densidad y longitud mediante parámetros explícitos, manteniendo la reproducibilidad mediante el uso de una semilla aleatoria.Por tanto, SAWLC se adopta aquí como un \textbf{modelo generativo orientado a la plausibilidad geométrica}: no pretende reproducir toda la dinámica biofísica de las proteínas, pero sí generar configuraciones suficientemente realistas y controlables para tareas de entrenamiento y validación de algoritmos de segmentación en criotomografía electrónica.
+La ventaja principal de SAWLC es que impone continuidad geométrica y auto-evitación durante el crecimiento de cada cadena, lo que mejora el realismo estructural de los datos sintéticos sin perder control experimental. Además, el modelo soporta clústeres heterogéneos compuestos por $J$ tipos distintos de macromoléculas, permitiendo simular entornos citosólicos complejos. En términos prácticos, permite regular la densidad y longitud mediante parámetros explícitos, manteniendo la reproducibilidad mediante el uso de una semilla aleatoria. Por tanto, SAWLC se adopta aquí como un \textbf{modelo generativo orientado a la plausibilidad geométrica}: no pretende reproducir toda la dinámica biofísica de las proteínas, pero sí generar configuraciones suficientemente realistas y controlables para tareas de entrenamiento y validación de algoritmos de segmentación en criotomografía electrónica.
 
 \begin{figure}[H]
     \centering
@@ -153,7 +153,7 @@ Para describir el comportamiento del método y su control sobre la densidad y or
     \While{$\rho < \rho^*$}{
         $intentos\_c \gets 0$\;
         \While{$intentos\_c < T_c$}{
-            $x_0 \gets$ muestrear\_semilla\_valida($V, v_{size}$)\;
+            $x_0 \gets$ muestrear\_semilla\_válida($V, v_{size}$)\;
             \If{$x_0$ es válida}{
                 $C \gets$ inicializar\_cadena($x_0, P_j$)\;
                 \For{$i = 1 \dots L_{max}$}{
@@ -218,7 +218,7 @@ En consecuencia, el modelo SAWLC debe entenderse como un procedimiento generativ
 
 \section{Algoritmo Tetris: Inserción de alta densidad}
 
-Para superar las limitaciones de empaquetamientos y alcanzar un mayor grado de ocupancia, surge el algoritmo \textbf{Tetris}, una técnica de gestión espacial para generar muestras tridimensionales con una alta congestión molecular (\textit{crowding}). A diferencia de los métodos de crecimiento polimérico, este algoritmo permite posicionar las proteínas de forma compacta y eficiente.
+Para superar las limitaciones de empaquetamiento y alcanzar un mayor grado de ocupancia, surge el algoritmo \textbf{Tetris}, una técnica de gestión espacial para generar muestras tridimensionales con una alta congestión molecular (\textit{crowding}). A diferencia de los métodos de crecimiento polimérico, este algoritmo permite posicionar las proteínas de forma compacta y eficiente.
 
 \subsection{Fundamentos del modelo Tetris}
 

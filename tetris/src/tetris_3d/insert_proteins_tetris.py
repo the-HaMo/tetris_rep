@@ -1,6 +1,6 @@
-USE_GPU = False  # False para forzar CPU
-
 import os, sys
+# TETRIS_USE_GPU env var permite que profile_comparison controle el modo sin editar este archivo
+USE_GPU = bool(int(os.environ.get("TETRIS_USE_GPU", "0")))
 if not USE_GPU:
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     sys.modules["cupy"] = None
@@ -145,6 +145,13 @@ def insert_proteins_in_membrane(membrane_mrc_path, proteins_list, output_dir, me
     num_types = len(proteins_list)
     output_mrc = Path(output_dir) / f"tomo{tomo_idx}_den{num_types}.mrc"
     lio.write_mrc(combined_cpu, str(output_mrc), v_size=VOI_VSIZE)
+
+    labels = xp.zeros(membrane_volume.shape, dtype=xp.uint8)
+    labels[~allowed_mask] = 1                          # membrana
+    labels[(final > 0) & allowed_mask] = 2             # proteínas
+    labels_cpu = labels.get() if HAS_GPU else labels
+    labels_mrc = Path(output_dir) / f"tomo{tomo_idx}_lbl{num_types}.mrc"
+    lio.write_mrc(labels_cpu, str(labels_mrc), v_size=VOI_VSIZE, dtype=np.uint8)
 
     print(f"\nMembrane occupancy before proteins: {membrane_occ*100:.4f}%")
     for type_idx, name, inserted_vox, num_monomers, proteins_occ, total_occ in per_type_summary:

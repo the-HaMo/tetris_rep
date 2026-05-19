@@ -366,7 +366,9 @@ def _generate_plots(rows: list) -> None:
     ax.errorbar(t_ext, tet_occ_x, yerr=tet_std_x, fmt="s-", lw=2, capsize=4, label="Tetris")
     ax.axline((0, 0), slope=1, color="k", ls="--", lw=1.5, alpha=0.8, zorder=10)
     ax.set_title("Packing Fraction Achieved")
-    ax.set_xlabel("Target Occupancy (%)"); ax.set_ylabel("Final Binary Occupancy (%)")
+    ax.set_xlabel("Target Occupancy (%)"); ax.set_ylabel("Measured Occupancy (%)")
+    ax.set_xlim(0, max(targets) * 1.02)
+    ax.set_ylim(0, max(targets) * 1.02)
     ax.legend()
 
     ax = axes[0, 1]

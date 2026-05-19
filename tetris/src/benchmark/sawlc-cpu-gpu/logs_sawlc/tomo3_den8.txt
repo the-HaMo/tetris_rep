@@ -1,0 +1,24 @@
+Combining membrane with proteins...
+Combined volume range: [0.0, 1.0232685804367065]
+Saved combined density to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_with_proteins_den.mrc
+Saved labels to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_labels.mrc
+[DEBUG] Membrane occupancy before proteins: 11.5450%
+[DEBUG] After type 01 (5mrc_10A.pns): monomers=369, inserted_vox=2687123, proteins_occ=4.2994%, total_occ=15.8444%
+[DEBUG] After type 02 (4v94_10A.pns): monomers=52, inserted_vox=246553, proteins_occ=4.6939%, total_occ=16.2389%
+[DEBUG] After type 03 (4v4r_10A.pns): monomers=166, inserted_vox=868204, proteins_occ=6.0830%, total_occ=17.6280%
+[DEBUG] After type 04 (4cr2_10A.pns): monomers=90, inserted_vox=299262, proteins_occ=6.5618%, total_occ=18.1069%
+[DEBUG] After type 05 (3d2f_10A.pns): monomers=5482, inserted_vox=3796632, proteins_occ=12.6364%, total_occ=24.1815%
+[DEBUG] After type 06 (1u6g_10A.pns): monomers=229, inserted_vox=160217, proteins_occ=12.8928%, total_occ=24.4378%
+[DEBUG] After type 07 (1qvr_10A.pns): monomers=10, inserted_vox=8948, proteins_occ=12.9071%, total_occ=24.4521%
+[DEBUG] After type 08 (3cf3_10A.pns): monomers=124, inserted_vox=94728, proteins_occ=13.0587%, total_occ=24.6037%
+Saved final VTP to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_final.vtp
+Kept only: ['tomo_mem00_final.vtp', 'tomo_mem00_labels.mrc', 'tomo_mem00_with_proteins_den.mrc']
+Saved outputs in: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00
+Processing time: 1013.81s
+✓ Successfully processed membrane 0
+
+============================================================
+TOTAL PROCESSING TIME: 16min 54.02s
+Output directory: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes
+============================================================
+

@@ -1,0 +1,22 @@
+Combining membrane with proteins...
+Combined volume range: [0.0, 1.0232223272323608]
+Saved combined density to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_with_proteins_den.mrc
+Saved labels to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_labels.mrc
+[DEBUG] Membrane occupancy before proteins: 11.5450%
+[DEBUG] After type 01 (5mrc_10A.pns): monomers=394, inserted_vox=2869803, proteins_occ=4.5917%, total_occ=16.1367%
+[DEBUG] After type 02 (4v94_10A.pns): monomers=19, inserted_vox=90100, proteins_occ=4.7358%, total_occ=16.2809%
+[DEBUG] After type 03 (4v4r_10A.pns): monomers=93, inserted_vox=486363, proteins_occ=5.5140%, total_occ=17.0591%
+[DEBUG] After type 04 (4cr2_10A.pns): monomers=244, inserted_vox=810268, proteins_occ=6.8105%, total_occ=18.3555%
+[DEBUG] After type 05 (3d2f_10A.pns): monomers=3773, inserted_vox=2612634, proteins_occ=10.9907%, total_occ=22.5357%
+[DEBUG] After type 06 (1u6g_10A.pns): monomers=1490, inserted_vox=1042271, proteins_occ=12.6583%, total_occ=24.2033%
+[DEBUG] After type 07 (1qvr_10A.pns): monomers=4, inserted_vox=3586, proteins_occ=12.6640%, total_occ=24.2091%
+Saved final VTP to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_final.vtp
+Kept only: ['tomo_mem00_final.vtp', 'tomo_mem00_labels.mrc', 'tomo_mem00_with_proteins_den.mrc']
+Saved outputs in: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00
+Processing time: 829.20s
+✓ Successfully processed membrane 0
+
+============================================================
+TOTAL PROCESSING TIME: 13min 49.40s
+Output directory: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes
+============================================================

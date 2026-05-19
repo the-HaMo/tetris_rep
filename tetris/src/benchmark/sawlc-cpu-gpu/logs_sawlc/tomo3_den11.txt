@@ -1,0 +1,26 @@
+Combining membrane with proteins...
+Combined volume range: [0.0, 1.0244214534759521]
+Saved combined density to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_with_proteins_den.mrc
+Saved labels to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_labels.mrc
+[DEBUG] Membrane occupancy before proteins: 11.5450%
+[DEBUG] After type 01 (5mrc_10A.pns): monomers=417, inserted_vox=3037191, proteins_occ=4.8595%, total_occ=16.4045%
+[DEBUG] After type 02 (4v94_10A.pns): monomers=23, inserted_vox=108782, proteins_occ=5.0336%, total_occ=16.5786%
+[DEBUG] After type 03 (4v4r_10A.pns): monomers=106, inserted_vox=554006, proteins_occ=5.9200%, total_occ=17.4650%
+[DEBUG] After type 04 (4cr2_10A.pns): monomers=65, inserted_vox=215769, proteins_occ=6.2652%, total_occ=17.8102%
+[DEBUG] After type 05 (3d2f_10A.pns): monomers=3350, inserted_vox=2314558, proteins_occ=9.9685%, total_occ=21.5135%
+[DEBUG] After type 06 (1u6g_10A.pns): monomers=2552, inserted_vox=1782080, proteins_occ=12.8198%, total_occ=24.3649%
+[DEBUG] After type 07 (1qvr_10A.pns): monomers=17, inserted_vox=15200, proteins_occ=12.8441%, total_occ=24.3892%
+[DEBUG] After type 08 (3cf3_10A.pns): monomers=235, inserted_vox=179181, proteins_occ=13.1308%, total_occ=24.6759%
+[DEBUG] After type 09 (2cg9_10A.pns): monomers=958, inserted_vox=512686, proteins_occ=13.9511%, total_occ=25.4962%
+[DEBUG] After type 10 (2uv8_10A.pns): monomers=0, inserted_vox=0, proteins_occ=13.9511%, total_occ=25.4962%
+[DEBUG] After type 11 (1s3x_10A.pns): monomers=22548, inserted_vox=3276195, proteins_occ=19.1930%, total_occ=30.7381%
+Saved final VTP to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_final.vtp
+Kept only: ['tomo_mem00_final.vtp', 'tomo_mem00_labels.mrc', 'tomo_mem00_with_proteins_den.mrc']
+Saved outputs in: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00
+Processing time: 1938.40s
+✓ Successfully processed membrane 0
+
+============================================================
+TOTAL PROCESSING TIME: 32min 18.62s
+Output directory: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes
+============================================================
