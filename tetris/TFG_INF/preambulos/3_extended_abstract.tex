@@ -106,8 +106,7 @@ the protein type is considered exhausted once a configurable number of consecuti
 
 A GPU-accelerated variant of Tetris was also developed using the \textit{CuPy} library,
 which provides a NumPy-compatible API for array operations on NVIDIA graphics processing
-units. The back-end is selected via a user-controlled boolean flag (\texttt{USE\_GPU}): when set
-to \texttt{True}, all heavy numerical operations (random rotation, gaussian smoothing,
+units.The back-end is selected via a user-controlled boolean flag (\texttt{USE\_GPU}): when set to \texttt{True}, all heavy numerical operations (random rotation, gaussian smoothing,
 morphological dilation, FFT-based cross-correlation and \texttt{argwhere}-based seed
 sampling) are dispatched to \texttt{cupyx.scipy} on the GPU; otherwise the same code paths
 fall back transparently to \texttt{scipy} on the CPU, without any change to the algorithmic
@@ -121,29 +120,19 @@ boundary constraints and verifies the absence of voxel overlap is preserved unch
 GPU; this control flow remains sequential and forces a host-device synchronisation on each
 \texttt{argmax} call, but its overall cost is comparable to that of pure host-side I/O
 operations and does not negate the benefits obtained on the parallelisable stages. The net
-effect is a global speedup of roughly $\times 3.1$ over the CPU implementation on the
+effect is a global speedup of roughly $\approx \times 3$ over the CPU implementation on the
 reference workload, with the two former bottlenecks effectively removed from the timing
 profile.\\
 
-To evaluate Tetris systematically, a benchmarking suite was designed comprising three
-complementary scripts. The first, \texttt{plot\_comparison.py}, runs complete simulations with
-all eleven protein types for each of the three algorithm variants (Tetris CPU, Tetris GPU, and
-SAWLC) and generates comparative visualisations of volumetric occupancy, cumulative execution
-time, monomer population per protein type, and insertion throughput. The second script,
-\texttt{profile\_comparison.py}, produces occupancy-vs-time curves that show how quickly each
-algorithm fills the available volume over the course of a full simulation. The third,
-\texttt{profile\_test.py}, instruments the Tetris algorithm with fine-grained timers to decompose
-the total execution time into its constituent phases: seed selection, random rotation, binary
-template construction, FFT cross-correlation, and overlap validation. This decomposition
-identifies where time is actually spent and guides further optimisation efforts.\\
+To evaluate Tetris systematically, a benchmarking suite of three scripts was developed in the \texttt{benchmark/} directory, all sharing the same experimental configuration: eleven protein types at 10~Å resolution and a membrane volume derived from a real cryo-ET tomogram.
 
-All simulations share the same experimental configuration: eleven protein types at 10~Å
-resolution, the same membrane volume derived from a real cryo-ET tomogram, and identical
-placement parameters including the isosurface threshold ratio and the maximum number of
-consecutive failures before moving to the next protein type. Each algorithm runs in an isolated
-subprocess spawned with Python's \texttt{multiprocessing} module using the \texttt{spawn}
-start method, ensuring a clean import environment. Results are serialised to a JSON cache file
-so that visualisations can be regenerated without repeating the time-consuming simulations.\\
+\texttt{profile\_test.py} instruments Tetris (CPU or GPU, controlled by \texttt{USE\_GPU}) with fine-grained timers and produces an occupancy-vs-time chart coloured by phase (seed selection, random rotation, template construction, FFT cross-correlation, overlap validation). Its purpose is to identify per-phase bottlenecks and guide GPU optimisation.
+
+\texttt{profile\_comparison.py} runs Tetris GPU, Tetris CPU, and SAWLC sequentially on the full eleven-protein workload and produces a single occupancy-vs-time line chart together with a CSV log. The goal is to compare how quickly each algorithm fills the available volume.
+
+\texttt{benchmark\_scientific\_comparison.py} sweeps a range of target occupancies from 2.5\% to 70\% in 2.5\% steps and runs both Tetris and SAWLC at each target, caching results in a JSON file to avoid redundant computation. It produces four comparative charts: packing fraction achieved vs target, execution time vs target, insertion throughput, and SAWLC failure count. The goal is to characterise the relative performance of both algorithms across the full density spectrum.
+
+The \texttt{sawlc-cpu-gpu/} subdirectory complements the above with a log-based analysis. It stores pre-recorded execution logs for Tetris CPU, Tetris GPU, and SAWLC (one log per number of protein types, from 1 to 11) and contains \texttt{plot\_comparison.py}, which reads those logs and produces a four-panel figure (\texttt{resultados\_comparativa\_completa.png}): total occupancy reached, execution time, monomer population per protein type (stacked bars), and throughput (monomers per minute) — all as a function of the number of active protein types. This chart reveals which algorithm achieves the highest packing density and insertion rate as molecular diversity increases.\\
 
 The preliminary results of this comparative study confirm the expected benefits of the Tetris
 approach. Across all simulated scenarios, Tetris achieves higher volumetric occupancy than
@@ -156,24 +145,20 @@ cannot access: the Tetris algorithm inserts substantially more monomers of small
 SAWLC, contributing more to the final volumetric occupancy.\\       
 
 In terms of execution time and throughput, the GPU variant of Tetris delivers the best
-performance. By eliminating the sequential overlap-checking loop and replacing it with fully
-vectorised GPU computation, the two-FFT optimisation achieves near-constant cost per insertion
-independent of the current density of the volume. This is in contrast to the CPU and SAWLC
-implementations, where the cost per insertion tends to increase as the volume becomes denser
-and more candidate positions need to be rejected. As a consequence, the performance advantage of
-Tetris GPU over SAWLC grows as the simulation progresses. The CPU variant of Tetris also
-outperforms SAWLC in throughput, because the FFT cross-correlation evaluates all positions in
-a single pass rather than through repeated random sampling.\\
+performance. The two dominant bottlenecks on CPU — the global \texttt{argwhere} inside
+\texttt{pick\_seed} ($\approx 50\%$ of total time) and the FFT cross-correlation ($\approx 15\%$) — are
+offloaded to the GPU via \texttt{CuPy}, reducing them to a negligible fraction of runtime.
+The sequential overlap-checking loop is preserved unchanged on both backends. The net effect
+is a speedup of $\times3$ over the CPU implementation. The CPU variant of Tetris is slower
+than SAWLC in execution time, but reaches a significantly higher final occupancy because the
+FFT-guided placement fills interstitial regions that SAWLC's random walk leaves inaccessible.\\
 
-It is important to acknowledge that the two algorithms reflect different biological priorities.
-SAWLC is designed to reproduce the spatial clustering patterns observed in real cells, where
-proteins are not uniformly distributed but tend to aggregate near membrane surfaces or form
-oligomeric assemblies. Tetris, in its current form, optimises for volumetric packing
-efficiency rather than for biological realism in the spatial distribution. This trade-off should
-be considered when choosing between the two algorithms for a given simulation goal: if the
-primary objective is to generate dense synthetic tomograms for training detection or segmentation
-networks, Tetris is the more appropriate choice; if the goal is to reproduce specific spatial
-statistics of macromolecular distributions, SAWLC may better capture those features.\\
+It is important to acknowledge that the two algorithms reflect different design philosophies.
+SAWLC models proteins as a worm-like chain — each new molecule is seeded near the surface of
+the previously inserted one, forming a polymer-like sequence that grows along a trajectory.
+Tetris eliminates the polymer concept entirely: instead of a chain, it grows a compact cluster
+that can start anywhere in the free volume and expands guided by the FFT correlation map,
+adapting its shape to the available space at each step.\\
 
 In conclusion, this work demonstrates that Tetris is a computationally efficient alternative
 to SAWLC for protein insertion in synthetic cryo-ET tomogram generation. The algorithm achieves
