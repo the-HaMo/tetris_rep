@@ -155,23 +155,6 @@ python plot_comparison.py
 
 ---
 
-## Algorithm overview
-
-Tetris reframes protein placement as an optimisation problem. At each insertion step:
-
-1. A seed coordinate is sampled uniformly from the free volume (`pick_seed`).
-2. A local bounding box is extracted around the seed.
-3. A binary occupancy map is constructed by thresholding the existing density at a global isosurface value (`min peak intensity × 0.08`).
-4. An **in-shell template** is built by morphologically dilating the new protein mask and subtracting the protein itself — encoding the ideal contact zone.
-5. The **3D FFT cross-correlation** between the shell template and the binary occupancy map is computed in O(N log N), producing a score map where high values indicate tight-packing positions.
-6. The position with the maximum valid score is selected and the protein is placed.
-
-Membrane pre-loading marks membrane voxels with a high density and penalises any candidate position that overlaps them, restricting insertion to biologically permitted regions.
-
-GPU acceleration (CuPy) targets the two dominant bottlenecks: the global `argwhere` inside `pick_seed` and the FFT cross-correlation, delivering a ~×3 speedup over the CPU implementation.
-
----
-
 ## Protein set (10 Å resolution)
 
 | Protein | Dimensions | Occupied voxels | Internal occupancy |
