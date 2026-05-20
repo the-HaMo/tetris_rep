@@ -1,7 +1,8 @@
 # GPU-specific requirements for Tetris 3D (CUDA 12)
-# Use this when your system has NVIDIA CUDA 12.x installed.
+# Use this when your system has an NVIDIA GPU (driver CUDA 12+).
+# No system-level CUDA toolkit needed — all libraries are installed via pip.
 
-numpy>=1.24.0,<2.0.0
+numpy>=2.0.0
 scipy>=1.10.0,<2.0.0
 scikit-image>=0.20.0,<1.0.0
 mrcfile>=1.4.0,<2.0.0
@@ -11,15 +12,10 @@ imageio>=2.31.0,<3.0.0
 matplotlib>=3.7.0,<4.0.0
 pyfftw>=0.13.0,<1.0.0
 
-# CuPy for CUDA 12 - installs Cupy with CUDA 12 prebuilt binaries
-cupy-cuda12x>=12.0.0
-
-# Optional: JAX GPU support (CUDA 12)
-# JAX wheels are distributed separately. Follow the official instructions:
-# https://github.com/google/jax#installation
-# Example (adjust versions as needed):
-# pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-# Notes:
-# - Only install one of the `cupy-cuda*` packages matching your CUDA toolkit.
-# - Consider pinning exact versions after validating on your machine for reproducibility.
+# CuPy + librerías CUDA distribuidas como wheels de Python (no requieren toolkit del sistema)
+cupy-cuda12x>=14.0.0
+nvidia-cuda-nvrtc-cu12
+nvidia-cuda-nvcc-cu12
+nvidia-cuda-runtime-cu12
+nvidia-cublas-cu12
+nvidia-cufft-cu12

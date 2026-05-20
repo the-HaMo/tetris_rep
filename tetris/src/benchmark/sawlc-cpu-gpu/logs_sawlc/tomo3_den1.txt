@@ -1,17 +1,17 @@
 Combining membrane with proteins...
-Combined volume range: [0.0, 1.0146583318710327]
-Saved combined density to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_with_proteins_den.mrc
-Saved labels to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_labels.mrc
+Combined volume range: [0.0, 1.0028455257415771]
+Saved combined density to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_with_proteins_den.mrc
+Saved labels to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_labels.mrc
 [DEBUG] Membrane occupancy before proteins: 11.5450%
-[DEBUG] After type 01 (5mrc_10A.pns): monomers=377, inserted_vox=2748149, proteins_occ=4.3970%, total_occ=15.9421%
-Saved final VTP to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_final.vtp
+[DEBUG] After type 01 (2uv8_10A.pns): monomers=503, inserted_vox=3552911, proteins_occ=5.6847%, total_occ=17.2297%
+Saved final VTP to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_final.vtp
 Kept only: ['tomo_mem00_final.vtp', 'tomo_mem00_labels.mrc', 'tomo_mem00_with_proteins_den.mrc']
-Saved outputs in: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00
-Processing time: 140.45s
+Saved outputs in: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00
+Processing time: 61.09s
 ✓ Successfully processed membrane 0
 
 ============================================================
-TOTAL PROCESSING TIME: 2min 20.56s
-Output directory: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes
+TOTAL PROCESSING TIME: 1min 1.14s
+Output directory: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl
 ============================================================
 

@@ -1,17 +1,19 @@
 Combining membrane with proteins...
-Combined volume range: [0.0, 1.017087697982788]
-Saved combined density to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_with_proteins_den.mrc
-Saved labels to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_labels.mrc
+Combined volume range: [0.0, 1.0154473781585693]
+Saved combined density to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_with_proteins_den.mrc
+Saved labels to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_labels.mrc
 [DEBUG] Membrane occupancy before proteins: 11.5450%
-[DEBUG] After type 01 (5mrc_10A.pns): monomers=392, inserted_vox=2857511, proteins_occ=4.5720%, total_occ=16.1171%
-[DEBUG] After type 02 (4v94_10A.pns): monomers=6, inserted_vox=28436, proteins_occ=4.6175%, total_occ=16.1626%
-Saved final VTP to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_final.vtp
+[DEBUG] After type 01 (2uv8_10A.pns): monomers=383, inserted_vox=2705733, proteins_occ=4.3292%, total_occ=15.8742%
+[DEBUG] After type 02 (5mrc_10A.pns): monomers=16, inserted_vox=116849, proteins_occ=4.5161%, total_occ=16.0612%
+Saved final VTP to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_final.vtp
 Kept only: ['tomo_mem00_final.vtp', 'tomo_mem00_labels.mrc', 'tomo_mem00_with_proteins_den.mrc']
-Saved outputs in: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00
-Processing time: 165.46s
+Saved outputs in: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00
+Processing time: 54.16s
 ✓ Successfully processed membrane 0
 
 ============================================================
-TOTAL PROCESSING TIME: 2min 45.61s
-Output directory: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes
+TOTAL PROCESSING TIME: 0min 54.21s
+Output directory: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl
 ============================================================
+
+(.venv) mohalab@hiperion:~/Tetris/tetris_rep/tetris/src/sawlc$ 

@@ -36,8 +36,8 @@ PROTEIN_FILE = [
     "in_10A/3d2f_10A.pns",
     "in_10A/1s3x_10A.pns"
 ]
-TARGETS_PERCENT   = [2.5, 5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0, 27.5, 30.0, 32.5, 35.0, 37.5, 40.0, 42.5, 45.0, 47.5, 50.0, 52.5, 55.0, 57.5, 60.0, 62.5, 65.0, 67.5, 70.0]
-REPEATS_PER_TARGET = 1
+TARGETS_PERCENT   = [2.5, 5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0, 27.5, 30.0, 32.5, 35.0, 37.5, 40.0, 42.5, 45.0, 47.5, 50.0, 52.5, 55.0, 57.5]
+REPEATS_PER_TARGET = 4
 BENCHMARK_VOI_SHAPE = (500, 500, 250)   # reducir si hay OOM; usar (300,300,250) en GPU
 
 FORCE_SAWLC_SHORT_CHAIN = False

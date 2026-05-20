@@ -22,27 +22,13 @@ MEMBRANE_FILES = [
     # "tomo_mem_lbls_0.mrc",
     # "tomo_mem_lbls_1.mrc",
     # "tomo_mem_lbls_2.mrc",
-    # "tomo_mem_lbls_3.mrc",
+     "tomo_mem_lbls_3.mrc",
  ]
 
 # Proteins to insert
 PROTEINS_LIST = [
-    "in_10A/4v4r_10A.pns",
-    # "in_10A/3j9i_10A.pns",
-    "in_10A/5mrc_10A.pns",
-    # "in_10A/4v7r_10A.pns",
-    "in_10A/2uv8_10A.pns",
-    "in_10A/4v94_10A.pns",
-    "in_10A/4cr2_10A.pns",
-    # "in_10A/3qm1_10A.pns",
-    # "in_10A/3h84_10A.pns",
-    # "in_10A/3gl1_10A.pns",
-    "in_10A/3d2f_10A.pns",
-    "in_10A/3cf3_10A.pns",
-    "in_10A/2cg9_10A.pns",
-    "in_10A/1u6g_10A.pns",
-    "in_10A/1s3x_10A.pns",
-    "in_10A/1qvr_10A.pns",
+          "in_10A/2uv8_10A.pns",
+    
 ]
 
 # Output directory

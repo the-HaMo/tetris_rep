@@ -1,21 +1,21 @@
 Combining membrane with proteins...
-Combined volume range: [0.0, 1.023192286491394]
-Saved combined density to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_with_proteins_den.mrc
-Saved labels to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_labels.mrc
+Combined volume range: [0.0, 1.0199553966522217]
+Saved combined density to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_with_proteins_den.mrc
+Saved labels to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_labels.mrc
 [DEBUG] Membrane occupancy before proteins: 11.5450%
-[DEBUG] After type 01 (5mrc_10A.pns): monomers=407, inserted_vox=2965900, proteins_occ=4.7454%, total_occ=16.2905%
-[DEBUG] After type 02 (4v94_10A.pns): monomers=90, inserted_vox=426304, proteins_occ=5.4275%, total_occ=16.9726%
-[DEBUG] After type 03 (4v4r_10A.pns): monomers=13, inserted_vox=67887, proteins_occ=5.5361%, total_occ=17.0812%
-[DEBUG] After type 04 (4cr2_10A.pns): monomers=281, inserted_vox=932776, proteins_occ=7.0286%, total_occ=18.5736%
-[DEBUG] After type 05 (3d2f_10A.pns): monomers=3902, inserted_vox=2702231, proteins_occ=11.3522%, total_occ=22.8972%
-[DEBUG] After type 06 (1u6g_10A.pns): monomers=1165, inserted_vox=814862, proteins_occ=12.6559%, total_occ=24.2010%
-Saved final VTP to: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00/tomo_mem00_final.vtp
+[DEBUG] After type 01 (2uv8_10A.pns): monomers=480, inserted_vox=3389676, proteins_occ=5.4235%, total_occ=16.9685%
+[DEBUG] After type 02 (5mrc_10A.pns): monomers=21, inserted_vox=153016, proteins_occ=5.6683%, total_occ=17.2133%
+[DEBUG] After type 03 (4v4r_10A.pns): monomers=41, inserted_vox=214568, proteins_occ=6.0116%, total_occ=17.5567%
+[DEBUG] After type 04 (4v94_10A.pns): monomers=48, inserted_vox=227648, proteins_occ=6.3759%, total_occ=17.9209%
+[DEBUG] After type 05 (4cr2_10A.pns): monomers=41, inserted_vox=136228, proteins_occ=6.5938%, total_occ=18.1389%
+[DEBUG] After type 06 (1qvr_10A.pns): monomers=3221, inserted_vox=2890267, proteins_occ=11.2182%, total_occ=22.7633%
+Saved final VTP to: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00/tomo_mem00_final.vtp
 Kept only: ['tomo_mem00_final.vtp', 'tomo_mem00_labels.mrc', 'tomo_mem00_with_proteins_den.mrc']
-Saved outputs in: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes/membrane_00
-Processing time: 803.62s
+Saved outputs in: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl/membrane_00
+Processing time: 241.26s
 ✓ Successfully processed membrane 0
 
 ============================================================
-TOTAL PROCESSING TIME: 13min 23.79s
-Output directory: /home/mohammed/repTetris/tetris/data/data_generated/output/output_proteins_in_membranes
+TOTAL PROCESSING TIME: 4min 1.34s
+Output directory: /home/mohalab/Tetris/tetris_rep/tetris/data/data_generated/output/output_proteins_sawcl
 ============================================================

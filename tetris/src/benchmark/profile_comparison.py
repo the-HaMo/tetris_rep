@@ -160,6 +160,12 @@ def _sawlc_profile_worker(q) -> None:
     try:
         for p_path in sorted_proteinSizes(PROTEINS_LIST):
             pn = PnFile().load(ROOT_PATH / p_path)
+            # base_occ: ocupancia total acumulada ANTES de esta proteína
+            # remaining_frac: fracción libre del VOI (para escalar __pl_occ de polnet)
+            cur_voi = sample._SyntheticSample__voi
+            base_occ      = 100.0 * float(_np.count_nonzero(~cur_voi)) / cur_voi.size
+            remaining_frac = float(_np.count_nonzero(cur_voi))  / cur_voi.size
+            q.put(("base", base_occ, remaining_frac))
             sample.add_set_cproteins(params=pn, data_path=ROOT_PATH,
                                      surf_dec=0.9, mmer_tries=20,
                                      pmer_tries=100, verbosity=True)
@@ -182,10 +188,17 @@ def _run_sawlc() -> Tuple[Timeline, float]:
     timeline: Timeline = []
     total_time = 0.0
     init_occ = 0.0
+    base_occ = 0.0
+    remaining_frac = 1.0
     while True:
         msg = q.get()
         if msg[0] == "init":
             init_occ = msg[1]
+            continue
+        if msg[0] == "base":
+            # base_occ: ocupancia total antes de esta proteína (membrana + proteínas previas)
+            # remaining_frac: fracción libre — escala __pl_occ (relativo) a ocupancia absoluta
+            base_occ, remaining_frac = msg[1], msg[2]
             continue
         if msg[0] == "done":
             _, total_time, final_occ = msg
@@ -196,8 +209,11 @@ def _run_sawlc() -> Tuple[Timeline, float]:
             _, line, t = msg
             m = re.search(r"Ocupancia\s+([\d.]+)%", line)
             if m:
-                # polnet imprime ocupancia solo de proteínas; sumamos la membrana
-                occ_total = init_occ + float(m.group(1))
+                # polnet imprime __pl_occ relativo al VOI restante al crear la red;
+                # convertimos a ocupancia absoluta con remaining_frac
+                raw = base_occ + float(m.group(1)) * remaining_frac
+                # la ocupancia acumulada nunca puede bajar
+                occ_total = max(raw, timeline[-1][1] if timeline else init_occ)
                 timeline.append((t, occ_total))
                 print(f"  [SAWLC] t={t:.1f}s occ={occ_total:.2f}%")
 
@@ -223,9 +239,9 @@ def _plot(timelines: dict, output_path: Path) -> None:
                 color=colors.get(label, "gray"),
                 linewidth=2.5, label=label)
 
-    ax.set_xlabel("Tiempo (segundos)", fontsize=12)
-    ax.set_ylabel("Ocupancia (%)",      fontsize=12)
-    ax.set_title("Curva de ocupancia acumulada: Tetris CPU vs GPU vs SAWLC", fontsize=13)
+    ax.set_xlabel("Time (s)", fontsize=12)
+    ax.set_ylabel("Occupancy (%)",      fontsize=12)
+    ax.set_title("Cumulative Occupancy Curve", fontsize=13, fontweight='bold')
     ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()

@@ -1,14 +1,15 @@
+
 Membrane occupancy before proteins: 11.5450%
-After type 01 (5mrc_10A.pns): inserted_vox=9249900, num_monomers=1212, proteins_occ=14.7998%, total_occ=26.3449%
-After type 02 (4v94_10A.pns): inserted_vox=12178660, num_monomers=669, proteins_occ=19.4859%, total_occ=31.0309%
-After type 03 (4v4r_10A.pns): inserted_vox=12189765, num_monomers=2, proteins_occ=19.5036%, total_occ=31.0487%
-After type 04 (4cr2_10A.pns): inserted_vox=13473456, num_monomers=376, proteins_occ=21.5575%, total_occ=33.1026%
-After type 05 (3d2f_10A.pns): inserted_vox=20267964, num_monomers=12212, proteins_occ=32.4287%, total_occ=43.9738%
-After type 06 (1u6g_10A.pns): inserted_vox=21203288, num_monomers=1420, proteins_occ=33.9253%, total_occ=45.4703%
-After type 07 (1qvr_10A.pns): inserted_vox=21274593, num_monomers=76, proteins_occ=34.0393%, total_occ=45.5844%
-After type 08 (3cf3_10A.pns): inserted_vox=21316375, num_monomers=53, proteins_occ=34.1062%, total_occ=45.6512%
-After type 09 (2cg9_10A.pns): inserted_vox=21859385, num_monomers=1017, proteins_occ=34.9750%, total_occ=46.5201%
-After type 10 (2uv8_10A.pns): inserted_vox=21895678, num_monomers=102, proteins_occ=35.0331%, total_occ=46.5781%
-After type 11 (1s3x_10A.pns): inserted_vox=26029037, num_monomers=40394, proteins_occ=41.6465%, total_occ=53.1915%
-total_occ = 53.1915%
-DONE: 57533 inserted in 249m 7.93s
+After type 01 (2uv8_10A.pns): inserted_vox=9313073, num_monomers=1171, proteins_occ=14.9009%, total_occ=26.4460%
+After type 02 (5mrc_10A.pns): inserted_vox=9448068, num_monomers=17, proteins_occ=15.1169%, total_occ=26.6619%
+After type 03 (4v4r_10A.pns): inserted_vox=10400378, num_monomers=167, proteins_occ=16.6406%, total_occ=28.1856%
+After type 04 (4v94_10A.pns): inserted_vox=11742020, num_monomers=253, proteins_occ=18.7872%, total_occ=30.3323%
+After type 05 (4cr2_10A.pns): inserted_vox=12810538, num_monomers=287, proteins_occ=20.4969%, total_occ=32.0419%
+After type 06 (1qvr_10A.pns): inserted_vox=18341974, num_monomers=5346, proteins_occ=29.3472%, total_occ=40.8922%
+After type 07 (3cf3_10A.pns): inserted_vox=19176132, num_monomers=950, proteins_occ=30.6818%, total_occ=42.2268%
+After type 08 (1u6g_10A.pns): inserted_vox=19744095, num_monomers=702, proteins_occ=31.5906%, total_occ=43.1356%
+After type 09 (2cg9_10A.pns): inserted_vox=20473738, num_monomers=1163, proteins_occ=32.7580%, total_occ=44.3030%
+After type 10 (3d2f_10A.pns): inserted_vox=20479361, num_monomers=7, proteins_occ=32.7670%, total_occ=44.3120%
+After type 11 (1s3x_10A.pns): inserted_vox=26023340, num_monomers=31913, proteins_occ=41.6373%, total_occ=53.1824%
+total_occ = 53.1824%
+DONE: 41976 inserted in 66m 59.18s
